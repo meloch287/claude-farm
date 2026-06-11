@@ -1,0 +1,12 @@
+{
+  "name": "claude-farm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo": "node src/farm.mjs demo",
+    "serve": "node src/farm.mjs serve",
+    "start": "node src/farm.mjs serve",
+    "test": "node --test test/"
+  }
+}

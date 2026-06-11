@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Клауд Ферма — пиксельный дашборд пайплайна</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#map">Перейти к карте дома</a>
+
+  <header class="site-header">
+    <h1>Клауд Ферма</h1>
+    <p class="tagline">Конвейер задач в пиксельном доме</p>
+
+    <ol id="stages" class="clothesline" aria-label="Этапы пайплайна">
+      <li class="stage" data-zone="kitchen">
+        <span class="stage-marker" aria-hidden="true">·</span>
+        <span class="stage-name">Сборка</span>
+      </li>
+      <li class="stage" data-zone="corridor">
+        <span class="stage-marker" aria-hidden="true">·</span>
+        <span class="stage-name">Обработка</span>
+      </li>
+      <li class="stage" data-zone="living">
+        <span class="stage-marker" aria-hidden="true">·</span>
+        <span class="stage-name">QA</span>
+      </li>
+      <li class="stage" data-zone="bath">
+        <span class="stage-marker" aria-hidden="true">·</span>
+        <span class="stage-name">Релиз</span>
+      </li>
+    </ol>
+  </header>
+
+  <section class="controls" aria-label="Управление фермой">
+    <button id="btn-demo" type="button">Запустить демо</button>
+    <button id="btn-sound" type="button" aria-pressed="false">
+      Звук <span class="sound-indicator" aria-hidden="true">выкл</span>
+    </button>
+    <span class="speed-control">
+      <label for="speed">Скорость</label>
+      <select id="speed">
+        <option value="0.5">Медленная</option>
+        <option value="1" selected>Обычная</option>
+        <option value="2">Быстрая</option>
+      </select>
+    </span>
+  </section>
+
+  <main id="map" class="house" tabindex="-1">
+    <section class="zone" data-zone="kitchen" data-state="idle" aria-labelledby="zone-kitchen-title">
+      <h2 id="zone-kitchen-title">Кухня — Сборка</h2>
+      <p class="zone-state">
+        <span class="zone-state-glyph" aria-hidden="true">·</span>
+        <span class="zone-state-text">Ожидание</span>
+      </p>
+      <div class="crew">
+        <div class="card card-driver">
+          <div class="sprite sprite-scraper" aria-hidden="true"></div>
+          <p class="card-role">Драйвер</p>
+          <p class="card-name">The Scraper</p>
+        </div>
+        <div class="card card-tester">
+          <div class="sprite sprite-cleaner" aria-hidden="true"></div>
+          <p class="card-role">Тестер</p>
+          <p class="card-name">The Cleaner</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="zone" data-zone="corridor" data-state="idle" aria-labelledby="zone-corridor-title">
+      <h2 id="zone-corridor-title">Коридор — Обработка</h2>
+      <p class="zone-state">
+        <span class="zone-state-glyph" aria-hidden="true">·</span>
+        <span class="zone-state-text">Ожидание</span>
+      </p>
+      <div class="crew">
+        <div class="card card-driver">
+          <div class="sprite sprite-editor" aria-hidden="true"></div>
+          <p class="card-role">Драйвер</p>
+          <p class="card-name">The Editor</p>
+        </div>
+        <div class="card card-tester">
+          <div class="sprite sprite-validator" aria-hidden="true"></div>
+          <p class="card-role">Тестер</p>
+          <p class="card-name">The Validator</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="zone" data-zone="living" data-state="idle" aria-labelledby="zone-living-title">
+      <h2 id="zone-living-title">Гостиная — QA</h2>
+      <p class="zone-state">
+        <span class="zone-state-glyph" aria-hidden="true">·</span>
+        <span class="zone-state-text">Ожидание</span>
+      </p>
+      <div class="crew">
+        <div class="card card-driver">
+          <div class="sprite sprite-runner" aria-hidden="true"></div>
+          <p class="card-role">Драйвер</p>
+          <p class="card-name">The Runner</p>
+        </div>
+        <div class="card card-tester">
+          <div class="sprite sprite-sniffer" aria-hidden="true"></div>
+          <p class="card-role">Тестер</p>
+          <p class="card-name">The Sniffer</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="zone" data-zone="bath" data-state="idle" aria-labelledby="zone-bath-title">
+      <h2 id="zone-bath-title">Ванная — Релиз</h2>
+      <p class="zone-state">
+        <span class="zone-state-glyph" aria-hidden="true">·</span>
+        <span class="zone-state-text">Ожидание</span>
+      </p>
+      <div class="crew">
+        <div class="card card-driver">
+          <div class="sprite sprite-archiver" aria-hidden="true"></div>
+          <p class="card-role">Драйвер</p>
+          <p class="card-name">The Archiver</p>
+        </div>
+        <div class="card card-tester">
+          <div class="sprite sprite-signoff" aria-hidden="true"></div>
+          <p class="card-role">Тестер</p>
+          <p class="card-name">The Sign-Off</p>
+        </div>
+      </div>
+    </section>
+
+    <div id="token" class="token" aria-hidden="true"></div>
+
+    <div id="status" class="status-bar" role="status"></div>
+  </main>
+
+  <section class="feed-panel" aria-label="Лента событий">
+    <h2>Лента событий</h2>
+    <div class="feed-log" role="log" aria-label="Журнал событий" tabindex="0">
+      <ul id="feed"></ul>
+    </div>
+  </section>
+</body>
+</html>
