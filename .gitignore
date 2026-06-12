@@ -3,3 +3,4 @@ output/
 *.log
 farm-events.jsonl
 .DS_Store
+.claude/

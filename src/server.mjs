@@ -20,6 +20,7 @@ const CONTENT_TYPES = {
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
   '.json': 'application/json; charset=utf-8',
 };
 
@@ -34,6 +35,28 @@ function sendText(res, statusCode, text) {
   res.end(text);
 }
 
+const EVENT_TYPES = new Set([
+  'task.created', 'zone.enter',
+  'driver.start', 'driver.done',
+  'tester.start', 'tester.ok', 'tester.bounce',
+  'task.done', 'task.failed',
+]);
+
+function readBody(req, limit = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk) => {
+      data += chunk;
+      if (data.length > limit) {
+        reject(new Error('body too large'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
+
 /**
  * Start the farm dashboard server.
  * @param {{config: object, bus?: object}} options
@@ -42,7 +65,11 @@ function sendText(res, statusCode, text) {
 export function startServer({ config = {}, bus = createEventBus() } = {}) {
   const requestedPort = config.port ?? 8787;
   // One farm instance per server so demo task ids keep incrementing (t1, t2, ...).
-  const demoFarm = createFarm({ ...config, stepDelayMs: 600 }, createSimRunners(), bus);
+  // stepDelayMs paces demo events at ~15s per zone (5 events x 3000ms) so the
+  // dashboard choreography (boss walk -> handoff -> work -> carry -> check)
+  // stays within one beat of reality without the catch-up queue compressing it.
+  // Tests and the CLI pass their own config and are unaffected.
+  const demoFarm = createFarm({ ...config, stepDelayMs: 3000 }, createSimRunners(), bus);
 
   function handleSse(req, res) {
     res.writeHead(200, {
@@ -81,7 +108,31 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
     sendJson(res, 200, { taskId: 'started' });
   }
 
-  async function handleStatic(pathname, res) {
+  // External orchestrators (the Main Agent — Claude) push their pipeline
+  // events here; the dashboard renders them exactly like sim-farm events.
+  async function handleIngest(req, res) {
+    let event;
+    try {
+      event = JSON.parse((await readBody(req)) || '{}');
+    } catch {
+      sendJson(res, 400, { error: 'Некорректный JSON' });
+      return;
+    }
+    if (!EVENT_TYPES.has(event.type)) {
+      sendJson(res, 400, { error: 'Неизвестный тип события', allowed: [...EVENT_TYPES] });
+      return;
+    }
+    bus.emit({
+      type: event.type,
+      taskId: typeof event.taskId === 'string' ? event.taskId : 'external',
+      zone: typeof event.zone === 'string' ? event.zone : undefined,
+      role: typeof event.role === 'string' ? event.role : undefined,
+      message: typeof event.message === 'string' ? event.message.slice(0, 500) : '',
+    });
+    sendJson(res, 200, { ok: true });
+  }
+
+  async function handleStatic(pathname, res, headOnly = false) {
     const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
     const filePath = path.normalize(path.join(DASHBOARD_DIR, relative));
 
@@ -100,8 +151,11 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
     }
     const contentType = CONTENT_TYPES[path.extname(filePath).toLowerCase()]
       ?? 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': contentType });
-    res.end(body);
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Length': body.length,
+    });
+    res.end(headOnly ? undefined : body);
   }
 
   const server = http.createServer(async (req, res) => {
@@ -129,8 +183,12 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
         await handleDemo(res);
         return;
       }
-      if (req.method === 'GET') {
-        await handleStatic(pathname, res);
+      if (req.method === 'POST' && pathname === '/api/event') {
+        await handleIngest(req, res);
+        return;
+      }
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        await handleStatic(pathname, res, req.method === 'HEAD');
         return;
       }
       sendText(res, 405, 'Метод не поддерживается');

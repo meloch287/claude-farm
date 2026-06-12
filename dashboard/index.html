@@ -3,16 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Клауд Ферма — пиксельный дашборд пайплайна</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="app.js" defer></script>
+  <meta name="color-scheme" content="light">
+  <title>Клауд Ферма — Урожайная долина</title>
+  <link rel="icon" href="favicon.ico" sizes="16x16">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="style.css?v=6">
+  <script src="app.js?v=5" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#map">Перейти к карте дома</a>
 
   <header class="site-header">
     <h1>Клауд Ферма</h1>
-    <p class="tagline">Конвейер задач в пиксельном доме</p>
+    <p class="tagline">Урожайная долина — конвейер задач в пиксельном доме</p>
 
     <ol id="stages" class="clothesline" aria-label="Этапы пайплайна">
       <li class="stage" data-zone="kitchen">
@@ -32,24 +35,42 @@
         <span class="stage-name">Релиз</span>
       </li>
     </ol>
+
+    <section class="controls" aria-label="Управление фермой">
+      <button id="btn-demo" type="button">Запустить демо</button>
+      <button id="btn-sound" type="button" aria-pressed="false">
+        Звук <span class="sound-indicator" aria-hidden="true">выкл</span>
+      </button>
+      <button id="btn-anim" type="button" aria-pressed="true">Анимация</button>
+      <span class="speed-control">
+        <label for="speed">Скорость</label>
+        <select id="speed">
+          <option value="0.5">Медленная</option>
+          <option value="1" selected>Обычная</option>
+          <option value="2">Быстрая</option>
+        </select>
+      </span>
+    </section>
   </header>
 
-  <section class="controls" aria-label="Управление фермой">
-    <button id="btn-demo" type="button">Запустить демо</button>
-    <button id="btn-sound" type="button" aria-pressed="false">
-      Звук <span class="sound-indicator" aria-hidden="true">выкл</span>
-    </button>
-    <span class="speed-control">
-      <label for="speed">Скорость</label>
-      <select id="speed">
-        <option value="0.5">Медленная</option>
-        <option value="1" selected>Обычная</option>
-        <option value="2">Быстрая</option>
-      </select>
-    </span>
-  </section>
-
   <main id="map" class="house" tabindex="-1">
+    <div class="farmhouse" aria-hidden="true">
+      <img class="scene" src="assets/map-scene.svg" alt="">
+      <img class="worker" data-worker="scraper" data-frame-a="assets/char-scraper-a.svg" data-frame-b="assets/char-scraper-b.svg" data-frame-sit="assets/char-scraper-sit.svg" src="assets/char-scraper-a.svg" alt="" style="left: 18.96%; bottom: 22.22%;">
+      <img class="worker" data-worker="cleaner" data-frame-a="assets/char-cleaner-a.svg" data-frame-b="assets/char-cleaner-b.svg" data-frame-sit="assets/char-cleaner-sit.svg" src="assets/char-cleaner-a.svg" alt="" style="left: 30.42%; bottom: 22.22%;">
+      <img class="worker" data-worker="editor" data-frame-a="assets/char-editor-a.svg" data-frame-b="assets/char-editor-b.svg" data-frame-sit="assets/char-editor-sit.svg" src="assets/char-editor-a.svg" alt="" style="left: 39.79%; bottom: 22.22%;">
+      <img class="worker" data-worker="validator" data-frame-a="assets/char-validator-a.svg" data-frame-b="assets/char-validator-b.svg" data-frame-sit="assets/char-validator-sit.svg" src="assets/char-validator-a.svg" alt="" style="left: 51.25%; bottom: 22.22%;">
+      <img class="worker" data-worker="runner" data-frame-a="assets/char-runner-a.svg" data-frame-b="assets/char-runner-b.svg" data-frame-sit="assets/char-runner-sit.svg" src="assets/char-runner-a.svg" alt="" style="left: 60.63%; bottom: 22.22%;">
+      <img class="worker" data-worker="sniffer" data-frame-a="assets/char-sniffer-a.svg" data-frame-b="assets/char-sniffer-b.svg" data-frame-sit="assets/char-sniffer-sit.svg" src="assets/char-sniffer-a.svg" alt="" style="left: 72.08%; bottom: 22.22%;">
+      <img class="worker" data-worker="archiver" data-frame-a="assets/char-archiver-a.svg" data-frame-b="assets/char-archiver-b.svg" data-frame-sit="assets/char-archiver-sit.svg" src="assets/char-archiver-a.svg" alt="" style="left: 81.46%; bottom: 22.22%;">
+      <img class="worker" data-worker="signoff" data-frame-a="assets/char-signoff-a.svg" data-frame-b="assets/char-signoff-b.svg" data-frame-sit="assets/char-signoff-sit.svg" src="assets/char-signoff-a.svg" alt="" style="left: 93.96%; bottom: 22.22%;">
+      <div id="boss" class="boss" style="left: 6.09%; bottom: 19.26%;">
+        <img class="boss-sprite" data-frame-a="assets/char-boss-a.svg" data-frame-b="assets/char-boss-b.svg" data-frame-sit="assets/char-boss-sit.svg" src="assets/char-boss-a.svg" alt="">
+        <img class="parcel" src="assets/item-parcel.svg" alt="">
+      </div>
+      <img id="paper" class="paper" src="assets/item-paper.svg" alt="" hidden>
+    </div>
+
     <section class="zone" data-zone="kitchen" data-state="idle" aria-labelledby="zone-kitchen-title">
       <h2 id="zone-kitchen-title">Кухня — Сборка</h2>
       <p class="zone-state">
@@ -58,12 +79,12 @@
       </p>
       <div class="crew">
         <div class="card card-driver">
-          <div class="sprite sprite-scraper" aria-hidden="true"></div>
+          <img class="portrait" src="assets/char-scraper-portrait.svg" alt="" aria-hidden="true">
           <p class="card-role">Драйвер</p>
           <p class="card-name">The Scraper</p>
         </div>
         <div class="card card-tester">
-          <div class="sprite sprite-cleaner" aria-hidden="true"></div>
+          <img class="portrait" src="assets/char-cleaner-portrait.svg" alt="" aria-hidden="true">
           <p class="card-role">Тестер</p>
           <p class="card-name">The Cleaner</p>
         </div>
@@ -78,12 +99,12 @@
       </p>
       <div class="crew">
         <div class="card card-driver">
-          <div class="sprite sprite-editor" aria-hidden="true"></div>
+          <img class="portrait" src="assets/char-editor-portrait.svg" alt="" aria-hidden="true">
           <p class="card-role">Драйвер</p>
           <p class="card-name">The Editor</p>
         </div>
         <div class="card card-tester">
-          <div class="sprite sprite-validator" aria-hidden="true"></div>
+          <img class="portrait" src="assets/char-validator-portrait.svg" alt="" aria-hidden="true">
           <p class="card-role">Тестер</p>
           <p class="card-name">The Validator</p>
         </div>
@@ -98,12 +119,12 @@
       </p>
       <div class="crew">
         <div class="card card-driver">
-          <div class="sprite sprite-runner" aria-hidden="true"></div>
+          <img class="portrait" src="assets/char-runner-portrait.svg" alt="" aria-hidden="true">
           <p class="card-role">Драйвер</p>
           <p class="card-name">The Runner</p>
         </div>
         <div class="card card-tester">
-          <div class="sprite sprite-sniffer" aria-hidden="true"></div>
+          <img class="portrait" src="assets/char-sniffer-portrait.svg" alt="" aria-hidden="true">
           <p class="card-role">Тестер</p>
           <p class="card-name">The Sniffer</p>
         </div>
@@ -118,12 +139,12 @@
       </p>
       <div class="crew">
         <div class="card card-driver">
-          <div class="sprite sprite-archiver" aria-hidden="true"></div>
+          <img class="portrait" src="assets/char-archiver-portrait.svg" alt="" aria-hidden="true">
           <p class="card-role">Драйвер</p>
           <p class="card-name">The Archiver</p>
         </div>
         <div class="card card-tester">
-          <div class="sprite sprite-signoff" aria-hidden="true"></div>
+          <img class="portrait" src="assets/char-signoff-portrait.svg" alt="" aria-hidden="true">
           <p class="card-role">Тестер</p>
           <p class="card-name">The Sign-Off</p>
         </div>

@@ -1,29 +1,67 @@
 /* ============================================================
    Клауд Ферма — dashboard stylesheet
-   8-bit cyberpunk, accessibility-first (WCAG AA).
-   No external assets; pure CSS pixel art.
-   Contrast (verified against #0a0a0a):
-     #39ff14 green   ~14.6:1  (text OK)
-     #00ffff cyan    ~15.8:1  (text OK, focus ring OK)
-     #ff00ff magenta  ~6.3:1  (text OK)
-     #ff5555 red      ~6.3:1  (text OK; preferred over pure #ff0000 ~4.9:1)
-     #a8a8a8 gray     ~8.3:1  (secondary text OK)
-     #767676 gray     ~4.3:1  (borders / UI components >= 3:1 OK)
+   Theme: «Урожайная долина» — cozy pixel farmhouse (original art,
+   Stardew-Valley-INSPIRED chrome: chunky wooden frames around
+   cream panels). Accessibility-first (WCAG AA).
+
+   Fonts (Cyrillic subsets verified via fonts.googleapis.com/css2
+   unicode-range: U+0400-045F present for all three):
+     "Press Start 2P"  — headings only, >=16px / 1.6 / .02em
+     "Pixelify Sans"   — pixel body font WITH Cyrillic, >=20px / 1.5 / .03em
+     "PT Mono"         — loaded fallback (Cyrillic confirmed)
+   VT323 has NO Cyrillic — not used.
+
+   Contrast (darkened state set, verified vs cream #fff6dd / parchment #f6e7c1):
+     #3a2417 ink        ~13.6:1 / ~11.9:1  (body text)
+     #5c4330 ink-soft    ~8.2:1 /  ~7.2:1  (secondary text)
+     #8a5a2b idle/wood   ~5.4:1 /  ~4.8:1  (state text + borders >= 3:1)
+     #7a5a10 working     ~5.9:1 /  ~5.2:1
+     #1f6a8c testing     ~5.5:1 /  ~4.9:1
+     #a8431f error       ~5.6:1 /  ~4.9:1
+     #3a6e1f done        ~5.6:1 /  ~5.0:1
+     #3a2417 on #e3a93a gold badge bg ~7.0:1
+   Gold #e3a93a NEVER as text / border / focus.
+   Bright accents (terracotta/leaf/gold/sky) = large decorative fills only.
    ============================================================ */
 
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;500;700&family=PT+Mono&display=swap");
+
 :root {
-  --bg: #0a0a0a;
-  --surface: #101018;
-  --surface-2: #15151f;
-  --ink: #d7ffd0;          /* main text, ~15:1 on bg */
-  --ink-dim: #a8a8a8;      /* secondary text, >= 4.5:1 */
-  --line: #767676;         /* UI borders, >= 3:1 */
-  --neon-green: #39ff14;
-  --neon-cyan: #00ffff;
-  --neon-magenta: #ff00ff;
-  --neon-red: #ff5555;
-  --px: 0.25rem;           /* one "pixel" of the sprite grid */
-  --font-stack: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  color-scheme: light;
+
+  /* surfaces */
+  --bg: #f6e7c1;            /* warm parchment page */
+  --surface: #fff6dd;       /* cream panel */
+  --surface-2: #fdf0cd;     /* cream, slightly toasted (active rooms) */
+  --parchment-deep: #f1dfae;/* feed parchment */
+
+  /* ink */
+  --ink: #3a2417;           /* chocolate text */
+  --ink-dim: #5c4330;       /* secondary text, >= 4.5:1 everywhere */
+
+  /* wood frame */
+  --wood: #8a5a2b;          /* frame body / UI borders >= 3:1 */
+  --wood-dark: #54331a;     /* frame outline */
+  --wood-hi: #c98e4f;       /* frame highlight bevel */
+  --line: #8a5a2b;          /* legacy alias kept for the selector contract */
+
+  /* darkened state set — the ONLY colors used as state text/border/focus */
+  --state-idle: #8a5a2b;
+  --state-working: #7a5a10;
+  --state-testing: #1f6a8c;
+  --state-error: #a8431f;
+  --state-done: #3a6e1f;
+
+  /* bright accents — large decorative fills ONLY (never text/border/focus) */
+  --terracotta: #d96c47;
+  --leaf: #7cb74a;
+  --gold: #e3a93a;          /* ok only as badge/button BACKGROUND with #3a2417 text */
+  --sky: #8ecae6;
+
+  --px: 0.25rem;            /* one "pixel" of the sprite grid */
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1); /* feedback curve, no bounce */
+  --font-head: "Press Start 2P", "PT Mono", ui-monospace, monospace;
+  --font-stack: "Pixelify Sans", "PT Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
 }
 
 /* ---------- Base ---------- */
@@ -39,18 +77,18 @@ body {
   min-height: 100vh;
   color: var(--ink);
   background-color: var(--bg);
-  /* static scanlines: painted BEHIND content, never over text */
+  /* faint parchment grain: painted BEHIND content, never over text */
   background-image: repeating-linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.02) 0,
-    rgba(255, 255, 255, 0.02) 1px,
+    rgba(138, 90, 43, 0.045) 0,
+    rgba(138, 90, 43, 0.045) 1px,
     transparent 1px,
-    transparent 4px
+    transparent 6px
   );
   font-family: var(--font-stack);
-  font-size: 1rem;
+  font-size: 1.25rem;        /* >= 20px for the pixel body font */
   line-height: 1.5;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 
 main {
@@ -59,43 +97,63 @@ main {
   padding: 0 1rem 2rem;
 }
 
+/* Headings: Press Start 2P (Cyrillic verified), >=16px, never paragraphs */
 h1, h2, h3 {
-  font-family: var(--font-stack);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  line-height: 1.25;
+  font-family: var(--font-head);
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
 }
 
 h1 {
-  font-size: 1.5rem;
-  color: var(--neon-green);
-  text-shadow: 0 0 0.5rem rgba(57, 255, 20, 0.4);
-  margin: 0 0 0.5rem;
+  font-size: 1.375rem;       /* 22px */
+  color: var(--ink);
+  /* decorative warm pixel shadow; text itself stays full-contrast ink */
+  text-shadow: 0.125rem 0.125rem 0 rgba(201, 142, 79, 0.55);
+  margin: 0 0 0.25rem;
 }
 
 h2 {
-  font-size: 1rem;
+  font-size: 1rem;           /* 16px minimum respected */
   margin: 0 0 0.5rem;
 }
 
+h3 {
+  font-size: 1rem;
+}
+
 a {
-  color: var(--neon-cyan);
+  color: #9c3d1c;            /* deep terracotta, ~6.3:1 on cream, underlined */
   text-underline-offset: 0.2em;
 }
 
-/* ---------- Focus: 2px outline + offset, never removed ---------- */
+a:hover {
+  color: var(--ink);
+}
+
+::selection {
+  background: var(--ink);    /* #fff6dd on #3a2417 ~13.6:1 */
+  color: var(--surface);
+}
+
+::placeholder {
+  color: var(--ink-dim);     /* >= 4.5:1 on cream */
+  opacity: 1;
+}
+
+/* ---------- Focus: 2px chocolate outline + offset, never removed ---------- */
 
 :focus {
-  outline: 2px solid var(--neon-cyan);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
 :focus:not(:focus-visible) {
-  outline: 2px solid var(--neon-cyan); /* keep visible even without :focus-visible support */
+  outline: 2px solid var(--ink); /* keep visible even without :focus-visible support */
 }
 
 :focus-visible {
-  outline: 2px solid var(--neon-cyan);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -107,11 +165,13 @@ a {
   top: 0.5rem;
   z-index: 100;
   padding: 0.5rem 1rem;
-  background: var(--bg);
-  color: var(--neon-cyan);
-  border: 2px solid var(--neon-cyan);
+  background: var(--surface);
+  color: var(--ink);
+  border: 2px solid var(--wood-dark);
+  border-radius: 0.375rem;
+  box-shadow: 0 0 0 0.1875rem var(--wood);
   text-decoration: none;
-  transform: translateY(-200%);
+  transform: translateY(-300%);
 }
 
 .skip-link:focus {
@@ -134,13 +194,35 @@ a {
   border: 0;
 }
 
-/* ---------- Header: title, clothesline, controls ---------- */
+/* ---------- Stardew-style wooden frame (shared recipe) ----------
+   Chunky wood border + dark outline + inner bevel highlight; the
+   border-radius + ringed box-shadows fake rounded pixel corners. */
+
+.farmhouse,
+section[data-zone],
+.feed-log,
+header.site-header,
+.site-header {
+  background: var(--surface);
+  border: 0.25rem solid var(--wood);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 0 0 0.1875rem var(--wood-dark),
+    inset 0 0 0 0.1875rem var(--wood-hi),
+    0 0.375rem 0 rgba(84, 51, 26, 0.18);
+}
+
+/* ---------- Header: warm cream sign-board, clothesline, controls ---------- */
 
 header {
   max-width: 75rem;
-  margin: 0 auto;
-  padding: 1rem 1rem 0.75rem;
-  border-bottom: 2px solid var(--line);
+  margin: 1rem auto 0;
+  padding: 0.75rem 1.25rem;
+}
+
+.tagline {
+  color: var(--ink-dim);
+  margin: 0;
 }
 
 .controls,
@@ -154,7 +236,6 @@ header .toolbar {
 }
 
 /* keep standalone sections on the same 75rem column as header/main */
-.controls,
 .feed-panel {
   max-width: 75rem;
   margin-left: auto;
@@ -163,20 +244,25 @@ header .toolbar {
   padding-right: 1rem;
 }
 
+/* the controls live inside the header sign-board (one card, tight rhythm) */
+.controls {
+  margin-top: 0.625rem;
+}
+
 .feed-panel {
   padding-bottom: 2rem;
 }
 
-/* ---------- Clothesline (#stages): rope + pins ---------- */
+/* ---------- Clothesline (#stages): rustic rope + wooden pegs ---------- */
 
 #stages {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1.5rem;
-  margin: 1rem 0 0;
-  padding: 0.75rem 0 0;
-  border-top: 2px dashed var(--line); /* the rope */
+  margin: 0.625rem 0 0;
+  padding: 0.5rem 0 0;
+  border-top: 0.1875rem dashed var(--wood); /* the rope */
 }
 
 #stages li {
@@ -189,39 +275,44 @@ header .toolbar {
   border-bottom: 0.25rem solid transparent;
 }
 
-/* pin marker hanging from the rope (decorative, empty content) */
+/* wooden peg hanging from the rope (decorative, empty content) */
 #stages li::before {
   content: "";
   flex: none;
   width: 0.625rem;
   height: 0.875rem;
-  border: 2px solid var(--line);
-  background: transparent;
-  margin-top: -0.25rem;
+  border: 2px solid var(--wood);
+  border-radius: 0.25rem 0.25rem 0.125rem 0.125rem;
+  background: var(--wood-hi);   /* decorative fill */
+  margin-top: -0.3125rem;
 }
 
-/* current stage: NON-COLOR markers — filled pin + thick underline + bold */
-#stages li[aria-current="step"] {
-  color: var(--neon-cyan);
+/* current stage: NON-COLOR markers — filled peg + thick underline + bold */
+#stages li[aria-current="step"],
+#stages li[data-stage="current"] {
+  color: var(--state-testing);
   font-weight: 700;
-  border-bottom-color: var(--neon-cyan);
+  border-bottom-color: var(--state-testing);
 }
 
-#stages li[aria-current="step"]::before {
-  border-color: var(--neon-cyan);
-  background: var(--neon-cyan);
-  box-shadow: 0 0 0.5rem rgba(0, 255, 255, 0.5);
+#stages li[aria-current="step"]::before,
+#stages li[data-stage="current"]::before {
+  border-color: var(--wood-dark);
+  background: var(--state-testing);
 }
 
-/* completed stages (optional hook for app.js) */
+/* completed stages (hook used by app.js: .done / data-done / data-stage) */
 #stages li.done,
-#stages li[data-done="true"] {
-  color: var(--neon-green);
+#stages li[data-done="true"],
+#stages li[data-stage="done"] {
+  color: var(--state-done);
 }
 
 #stages li.done::before,
-#stages li[data-done="true"]::before {
-  border-color: var(--neon-green);
+#stages li[data-done="true"]::before,
+#stages li[data-stage="done"]::before {
+  border-color: var(--state-done);
+  background: var(--state-done);
 }
 
 /* ---------- House map (#map): zone grid ---------- */
@@ -230,27 +321,70 @@ header .toolbar {
   position: relative; /* anchor for the travelling #token */
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-  gap: 1rem;
-  margin-top: 1.5rem;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+/* ---------- Wide screens: controls share the title line ----------
+   Reclaims ~100px of header height at >=1200px so the farmhouse map —
+   including the character lane on the floor and a sliver of garden —
+   fits the first viewport. The controls sit right of the short title;
+   the tagline and the clothesline each keep one compact full-width
+   line. Below 75rem (and at 200% zoom) everything stacks as before. */
+
+@media (min-width: 75rem) {
+  .site-header {
+    display: grid;
+    grid-template-areas:
+      "title   controls"
+      "tagline tagline"
+      "stages  stages";
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 1.5rem;
+    align-items: center;
+    /* the sign-board widens to match the 90rem farmhouse panel below,
+       making room for title + controls on one line */
+    max-width: min(90rem, 100vw - 2rem);
+  }
+
+  .site-header h1 {
+    grid-area: title;
+    margin: 0;
+  }
+
+  .site-header .tagline {
+    grid-area: tagline;
+    margin-top: 0.25rem;
+  }
+
+  .site-header #stages {
+    grid-area: stages;
+  }
+
+  .site-header .controls {
+    grid-area: controls;
+    justify-content: flex-end;
+    margin-top: 0;
+  }
 }
 
 section[data-zone] {
   /* state color token; overridden per data-state below */
-  --state-color: var(--line);
+  --state-color: var(--state-idle);
   position: relative;
-  min-height: 11rem;
+  min-height: 11rem;          /* min-height only: survives 1.4.12 text-spacing */
   padding: 1rem;
-  background: var(--surface);
-  border: 2px solid var(--state-color);
+  border-color: var(--state-color);
   image-rendering: pixelated;
 }
 
-/* pixel corner notches for the 8-bit window feel (decorative) */
+/* inner stitched parchment inset for the cozy room feel (decorative) */
 section[data-zone]::after {
   content: "";
   position: absolute;
-  inset: 0.375rem;
-  border: 1px dashed rgba(118, 118, 118, 0.45);
+  inset: 0.5rem;
+  border: 1px dashed rgba(138, 90, 43, 0.45);
+  border-radius: 0.375rem;
   pointer-events: none;
 }
 
@@ -258,6 +392,16 @@ section[data-zone] h2 {
   color: var(--ink);
   border-bottom: 2px solid var(--state-color);
   padding-bottom: 0.4rem;
+}
+
+/* Reserve two heading lines whenever zone cards sit side by side, so the
+   state badges and crew rows stay aligned across the row even when one
+   title («Коридор — Обработка») wraps and its neighbours do not.
+   min-height (not height): text can still grow at 200% zoom / 1.4.12. */
+@media (min-width: 37rem) {
+  section[data-zone] h2 {
+    min-height: calc(3.2em + 0.4rem + 2px); /* 2 lines @ 1.6 + pad + border */
+  }
 }
 
 /* agent names: real text, slightly dimmed but >= 4.5:1 */
@@ -274,7 +418,7 @@ section[data-zone] .agents {
   margin: 0.5rem 0;
 }
 
-/* visible state label: color + text, never color alone */
+/* visible state label: color + glyph + text, never color alone */
 .state-label,
 section[data-zone] .zone-state,
 section[data-zone] .state,
@@ -283,13 +427,13 @@ section[data-zone] output {
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.625rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   color: var(--state-color);
-  border: 1px solid var(--state-color);
-  background: var(--bg);
+  border: 2px solid var(--state-color);
+  border-radius: 0.375rem;
+  background: var(--surface);
 }
 
 /* glyph rendered by app.js (aria-hidden in DOM): just size it */
@@ -301,99 +445,127 @@ section[data-zone] .glyph {
   line-height: 1;
 }
 
-/* ---------- Crew cards + decorative sprites ---------- */
+/* ---------- Crew cards: wooden plaques with real portraits ----------
+   Grid layout [portrait | badge / name] — no absolute positioning, so
+   nothing can overlap at any width / zoom / text-spacing override. */
 
 .crew {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: 0.75rem;
   margin-top: 0.75rem;
 }
 
 .crew .card {
-  flex: 1 1 7rem;
-  padding: 0.5rem;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  row-gap: 0.25rem;
+  align-content: center;
+  padding: 0.625rem 0.75rem;
+  border: 0.1875rem solid var(--wood);
+  border-radius: 0.5rem;
+  background: var(--bg);     /* parchment plaque on cream room */
+  box-shadow:
+    inset 0 0 0 1px rgba(201, 142, 79, 0.5),
+    0 0.25rem 0 rgba(84, 51, 26, 0.18);
 }
 
+/* portrait: bust sprite (16x13 head-and-shoulders crop — the face fills
+   the frame) in a cream inset frame (decorative, alt="" + aria-hidden in
+   DOM); 4.5x4rem box suits the wide bust ratio */
+.crew .portrait {
+  grid-row: 1 / 3;
+  align-self: center;
+  width: 4.5rem;
+  height: 4rem;
+  padding: 0.375rem;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: var(--surface);
+  border: 2px solid var(--wood);
+  border-radius: 0.375rem;
+  box-shadow: inset 0 0 0 1px rgba(201, 142, 79, 0.5);
+}
+
+/* role badge: colored BACKGROUND + #3a2417 text (never color-as-text);
+   role is also plain text, so meaning never rides on color alone */
 .crew .card-role {
-  font-size: 0.875rem;
+  grid-column: 2;
+  justify-self: start;
+  margin: 0;
+  padding: 0.125rem 0.5rem;
+  font-size: 1.25rem;          /* body font stays >= 20px */
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: var(--ink);
+  background: var(--gold);     /* #3a2417 on #e3a93a ~7.0:1 */
+  border: 1px solid var(--wood-dark);
+  border-radius: 0.375rem;
+}
+
+.crew .card-tester .card-role {
+  background: var(--sky);      /* #3a2417 on #8ecae6 ~8.1:1 */
 }
 
 .crew .card-name {
+  grid-column: 2;
+  margin: 0;
   color: var(--ink);
   font-weight: 700;
 }
 
-/* sprites are pure decoration (aria-hidden in DOM) */
-.sprite {
-  --sprite-color: var(--ink-dim);
-  width: 2rem;
-  height: 2rem;
-  image-rendering: pixelated;
-  background-image: repeating-conic-gradient(var(--sprite-color) 0 25%, transparent 0 50%);
-  background-size: 0.5rem 0.5rem;
-}
-
-.sprite-scraper,
-.sprite-editor,
-.sprite-runner,
-.sprite-archiver {
-  --sprite-color: var(--neon-cyan);
-}
-
-.sprite-cleaner,
-.sprite-validator,
-.sprite-sniffer,
-.sprite-signoff {
-  --sprite-color: var(--neon-magenta);
-}
-
-/* ---------- Zone states ---------- */
+/* ---------- Zone states (darkened set; meaning carried by glyph+text) ---------- */
 
 section[data-zone][data-state="idle"] {
-  --state-color: var(--line);
+  --state-color: var(--state-idle);
 }
 
 section[data-zone][data-state="idle"] .state-label,
 section[data-zone][data-state="idle"] .zone-state,
 section[data-zone][data-state="idle"] .state,
 section[data-zone][data-state="idle"] output {
-  color: var(--ink-dim); /* #767676 is fine for the border, not for text */
+  color: var(--state-idle);  /* ~5.4:1 on cream */
 }
 
 section[data-zone][data-state="working"] {
-  --state-color: var(--neon-cyan);
+  --state-color: var(--state-working);
   background: var(--surface-2);
-  box-shadow: 0 0 0.75rem rgba(0, 255, 255, 0.25), inset 0 0 1.5rem rgba(0, 255, 255, 0.06);
+  box-shadow:
+    0 0 0 0.1875rem var(--wood-dark),
+    inset 0 0 0 0.1875rem var(--wood-hi),
+    0 0.375rem 0 rgba(84, 51, 26, 0.18),
+    inset 0 0 1.75rem rgba(227, 169, 58, 0.22); /* warm hearth wash */
 }
 
 section[data-zone][data-state="testing"] {
-  --state-color: var(--neon-magenta);
+  --state-color: var(--state-testing);
   background: var(--surface-2);
-  box-shadow: 0 0 0.75rem rgba(255, 0, 255, 0.25), inset 0 0 1.5rem rgba(255, 0, 255, 0.06);
+  box-shadow:
+    0 0 0 0.1875rem var(--wood-dark),
+    inset 0 0 0 0.1875rem var(--wood-hi),
+    0 0.375rem 0 rgba(84, 51, 26, 0.18),
+    inset 0 0 1.75rem rgba(142, 202, 230, 0.25); /* cool sky wash */
 }
 
 section[data-zone][data-state="done"] {
-  --state-color: var(--neon-green);
+  --state-color: var(--state-done);
 }
 
 section[data-zone][data-state="error"] {
-  --state-color: var(--neon-red);
-  /* 0.7s cycle => ~1.4 flashes/sec, under the 3/sec limit */
+  --state-color: var(--state-error);
+  /* 0.7s cycle => ~1.4 flashes/sec, under the 3/sec limit (timing preserved) */
   animation: error-blink 0.7s steps(2, jump-none) 6;
-  box-shadow: 0 0 0.75rem rgba(255, 85, 85, 0.35);
 }
 
 @keyframes error-blink {
-  0%, 49%  { border-color: var(--neon-red); }
+  0%, 49%   { border-color: var(--state-error); }
   50%, 100% { border-color: var(--surface); }
 }
 
-/* ---------- Token: pixel-art cartridge sprite (box-shadow art) ---------- */
+/* ---------- Token: pixel-art parcel sprite (box-shadow art) ---------- */
 
 #token {
   position: absolute;
@@ -404,145 +576,398 @@ section[data-zone][data-state="error"] {
   background: transparent;
   pointer-events: none;       /* never interactive, never focusable */
   z-index: 5;
-  /* chunky stepped travel, duration driven by app.js via --anim-duration */
-  transition: transform var(--anim-duration, 600ms) steps(6, jump-end);
+  /* travel duration driven by app.js via --anim-duration */
+  transition: transform var(--anim-duration, 600ms) var(--ease-out);
   will-change: transform;
   image-rendering: pixelated;
-  /* 8x8 cartridge: green shell, cyan shutter, magenta label */
+  /* 8x8 parcel: wood crate, gold ribbon, dark outline */
   box-shadow:
-    /* y0 */
-    calc(var(--px)*1) 0 var(--neon-green),
-    calc(var(--px)*2) 0 var(--neon-green),
-    calc(var(--px)*3) 0 var(--neon-green),
-    calc(var(--px)*4) 0 var(--neon-green),
-    calc(var(--px)*5) 0 var(--neon-green),
-    calc(var(--px)*6) 0 var(--neon-green),
+    /* y0 outline top */
+    calc(var(--px)*1) 0 var(--wood-dark),
+    calc(var(--px)*2) 0 var(--wood-dark),
+    calc(var(--px)*3) 0 var(--wood-dark),
+    calc(var(--px)*4) 0 var(--wood-dark),
+    calc(var(--px)*5) 0 var(--wood-dark),
+    calc(var(--px)*6) 0 var(--wood-dark),
     /* y1 */
-    0 calc(var(--px)*1) var(--neon-green),
-    calc(var(--px)*1) calc(var(--px)*1) var(--neon-green),
-    calc(var(--px)*2) calc(var(--px)*1) var(--neon-cyan),
-    calc(var(--px)*3) calc(var(--px)*1) var(--neon-cyan),
-    calc(var(--px)*4) calc(var(--px)*1) var(--neon-cyan),
-    calc(var(--px)*5) calc(var(--px)*1) var(--neon-cyan),
-    calc(var(--px)*6) calc(var(--px)*1) var(--neon-green),
-    calc(var(--px)*7) calc(var(--px)*1) var(--neon-green),
+    0 calc(var(--px)*1) var(--wood-dark),
+    calc(var(--px)*1) calc(var(--px)*1) var(--wood-hi),
+    calc(var(--px)*2) calc(var(--px)*1) var(--wood-hi),
+    calc(var(--px)*3) calc(var(--px)*1) var(--gold),
+    calc(var(--px)*4) calc(var(--px)*1) var(--gold),
+    calc(var(--px)*5) calc(var(--px)*1) var(--wood-hi),
+    calc(var(--px)*6) calc(var(--px)*1) var(--wood-hi),
+    calc(var(--px)*7) calc(var(--px)*1) var(--wood-dark),
     /* y2 */
-    0 calc(var(--px)*2) var(--neon-green),
-    calc(var(--px)*1) calc(var(--px)*2) var(--neon-green),
-    calc(var(--px)*2) calc(var(--px)*2) var(--neon-cyan),
-    calc(var(--px)*3) calc(var(--px)*2) var(--neon-cyan),
-    calc(var(--px)*4) calc(var(--px)*2) var(--neon-cyan),
-    calc(var(--px)*5) calc(var(--px)*2) var(--neon-cyan),
-    calc(var(--px)*6) calc(var(--px)*2) var(--neon-green),
-    calc(var(--px)*7) calc(var(--px)*2) var(--neon-green),
-    /* y3 */
-    0 calc(var(--px)*3) var(--neon-green),
-    calc(var(--px)*1) calc(var(--px)*3) var(--neon-green),
-    calc(var(--px)*2) calc(var(--px)*3) var(--neon-green),
-    calc(var(--px)*3) calc(var(--px)*3) var(--neon-green),
-    calc(var(--px)*4) calc(var(--px)*3) var(--neon-green),
-    calc(var(--px)*5) calc(var(--px)*3) var(--neon-green),
-    calc(var(--px)*6) calc(var(--px)*3) var(--neon-green),
-    calc(var(--px)*7) calc(var(--px)*3) var(--neon-green),
-    /* y4 */
-    0 calc(var(--px)*4) var(--neon-green),
-    calc(var(--px)*1) calc(var(--px)*4) var(--neon-green),
-    calc(var(--px)*2) calc(var(--px)*4) var(--neon-green),
-    calc(var(--px)*3) calc(var(--px)*4) var(--neon-green),
-    calc(var(--px)*4) calc(var(--px)*4) var(--neon-green),
-    calc(var(--px)*5) calc(var(--px)*4) var(--neon-green),
-    calc(var(--px)*6) calc(var(--px)*4) var(--neon-green),
-    calc(var(--px)*7) calc(var(--px)*4) var(--neon-green),
+    0 calc(var(--px)*2) var(--wood-dark),
+    calc(var(--px)*1) calc(var(--px)*2) var(--wood),
+    calc(var(--px)*2) calc(var(--px)*2) var(--wood),
+    calc(var(--px)*3) calc(var(--px)*2) var(--gold),
+    calc(var(--px)*4) calc(var(--px)*2) var(--gold),
+    calc(var(--px)*5) calc(var(--px)*2) var(--wood),
+    calc(var(--px)*6) calc(var(--px)*2) var(--wood),
+    calc(var(--px)*7) calc(var(--px)*2) var(--wood-dark),
+    /* y3 ribbon band */
+    0 calc(var(--px)*3) var(--wood-dark),
+    calc(var(--px)*1) calc(var(--px)*3) var(--gold),
+    calc(var(--px)*2) calc(var(--px)*3) var(--gold),
+    calc(var(--px)*3) calc(var(--px)*3) var(--gold),
+    calc(var(--px)*4) calc(var(--px)*3) var(--gold),
+    calc(var(--px)*5) calc(var(--px)*3) var(--gold),
+    calc(var(--px)*6) calc(var(--px)*3) var(--gold),
+    calc(var(--px)*7) calc(var(--px)*3) var(--wood-dark),
+    /* y4 ribbon band */
+    0 calc(var(--px)*4) var(--wood-dark),
+    calc(var(--px)*1) calc(var(--px)*4) var(--gold),
+    calc(var(--px)*2) calc(var(--px)*4) var(--gold),
+    calc(var(--px)*3) calc(var(--px)*4) var(--gold),
+    calc(var(--px)*4) calc(var(--px)*4) var(--gold),
+    calc(var(--px)*5) calc(var(--px)*4) var(--gold),
+    calc(var(--px)*6) calc(var(--px)*4) var(--gold),
+    calc(var(--px)*7) calc(var(--px)*4) var(--wood-dark),
     /* y5 */
-    0 calc(var(--px)*5) var(--neon-green),
-    calc(var(--px)*1) calc(var(--px)*5) var(--neon-green),
-    calc(var(--px)*2) calc(var(--px)*5) var(--neon-magenta),
-    calc(var(--px)*3) calc(var(--px)*5) var(--neon-magenta),
-    calc(var(--px)*4) calc(var(--px)*5) var(--neon-magenta),
-    calc(var(--px)*5) calc(var(--px)*5) var(--neon-magenta),
-    calc(var(--px)*6) calc(var(--px)*5) var(--neon-green),
-    calc(var(--px)*7) calc(var(--px)*5) var(--neon-green),
+    0 calc(var(--px)*5) var(--wood-dark),
+    calc(var(--px)*1) calc(var(--px)*5) var(--wood),
+    calc(var(--px)*2) calc(var(--px)*5) var(--wood),
+    calc(var(--px)*3) calc(var(--px)*5) var(--gold),
+    calc(var(--px)*4) calc(var(--px)*5) var(--gold),
+    calc(var(--px)*5) calc(var(--px)*5) var(--wood),
+    calc(var(--px)*6) calc(var(--px)*5) var(--wood),
+    calc(var(--px)*7) calc(var(--px)*5) var(--wood-dark),
     /* y6 */
-    0 calc(var(--px)*6) var(--neon-green),
-    calc(var(--px)*1) calc(var(--px)*6) var(--neon-green),
-    calc(var(--px)*2) calc(var(--px)*6) var(--neon-magenta),
-    calc(var(--px)*3) calc(var(--px)*6) var(--neon-magenta),
-    calc(var(--px)*4) calc(var(--px)*6) var(--neon-magenta),
-    calc(var(--px)*5) calc(var(--px)*6) var(--neon-magenta),
-    calc(var(--px)*6) calc(var(--px)*6) var(--neon-green),
-    calc(var(--px)*7) calc(var(--px)*6) var(--neon-green),
-    /* y7 */
-    calc(var(--px)*1) calc(var(--px)*7) var(--neon-green),
-    calc(var(--px)*2) calc(var(--px)*7) var(--neon-green),
-    calc(var(--px)*3) calc(var(--px)*7) var(--neon-green),
-    calc(var(--px)*4) calc(var(--px)*7) var(--neon-green),
-    calc(var(--px)*5) calc(var(--px)*7) var(--neon-green),
-    calc(var(--px)*6) calc(var(--px)*7) var(--neon-green);
+    0 calc(var(--px)*6) var(--wood-dark),
+    calc(var(--px)*1) calc(var(--px)*6) var(--wood),
+    calc(var(--px)*2) calc(var(--px)*6) var(--wood),
+    calc(var(--px)*3) calc(var(--px)*6) var(--gold),
+    calc(var(--px)*4) calc(var(--px)*6) var(--gold),
+    calc(var(--px)*5) calc(var(--px)*6) var(--wood),
+    calc(var(--px)*6) calc(var(--px)*6) var(--wood),
+    calc(var(--px)*7) calc(var(--px)*6) var(--wood-dark),
+    /* y7 outline bottom */
+    calc(var(--px)*1) calc(var(--px)*7) var(--wood-dark),
+    calc(var(--px)*2) calc(var(--px)*7) var(--wood-dark),
+    calc(var(--px)*3) calc(var(--px)*7) var(--wood-dark),
+    calc(var(--px)*4) calc(var(--px)*7) var(--wood-dark),
+    calc(var(--px)*5) calc(var(--px)*7) var(--wood-dark),
+    calc(var(--px)*6) calc(var(--px)*7) var(--wood-dark);
 }
 
-/* ---------- Controls: buttons + select ---------- */
+/* legacy parcel: the farmhouse boss now carries the paper, so hide the
+   old travelling token visually (element + JS behavior stay intact) */
+#map:has(.farmhouse) #token {
+  visibility: hidden;
+}
+
+/* ---------- Farmhouse map: dollhouse cutaway panel ---------- */
+
+/* Hero panel: spans the full #map grid and breaks out of the 75rem
+   column up to 90rem (centered, always >= 1rem viewport margin), so
+   the dollhouse dominates the page. aspect-ratio stays locked to the
+   960x540 scene so the %-based actor coordinates always line up. */
+.farmhouse {
+  position: relative;
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: min(90rem, 100vw - 2rem);
+  aspect-ratio: 960 / 540;
+  margin-top: 0;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* the painted scene fills the panel exactly (same 960/540 ratio) */
+.farmhouse .scene {
+  width: 100%;
+  height: 100%;
+}
+
+/* crisp pixels for every sprite image inside the house */
+.farmhouse img,
+.farmhouse svg,
+.farmhouse .pixel {
+  image-rendering: pixelated;
+}
+
+.farmhouse img {
+  display: block;
+}
+
+/* restore [hidden] semantics (display:block above would defeat it) */
+.farmhouse img[hidden] {
+  display: none;
+}
+
+/* villagers scale with the map: 16px-wide art at the 3x scene scale
+   (48 of 960 scene px, ~105px tall at a 1440px viewport) so the cast
+   reads as the heroes of the dollhouse */
+.farmhouse .worker {
+  width: 5%;
+  height: auto;
+}
+
+/* ---- Choreography hooks (driven by app.js desk/handoff scenes) ----
+   An .actor is an absolutely positioned decorative sprite img inside
+   .farmhouse, bottom-anchored on the floor line. JS moves it with an
+   inline transform; --walk-ms sets the segment duration (linear walk,
+   in-room 800-1600ms, boss room-to-room 2000-4000ms). */
+
+.farmhouse .actor {
+  position: absolute;
+  bottom: var(--floor-y, 22.22%);
+  left: 0;
+  width: 5%;
+  height: auto;
+  pointer-events: none;
+  z-index: 5;
+  transition: transform var(--walk-ms, 1200ms) linear;
+  will-change: transform;
+}
+
+.farmhouse .actor.flip {
+  transform: scaleX(-1);
+}
+
+/* the paper sheet being carried / handed over (10x8 art, decorative) */
+.farmhouse .paper {
+  position: absolute;
+  width: 3.2%;
+  height: auto;
+  pointer-events: none;
+  z-index: 7;
+  transition: transform var(--walk-ms, 1200ms) linear;
+  will-change: transform;
+}
+
+/* the JS-created shared paper ships an inline width of 2.6%; !important
+   scales the decorative sheet up with the 1.5x cast (sizing only — the
+   inline transform/transition driven by app.js stays untouched) */
+.farmhouse .item-paper {
+  width: 3.9% !important;
+}
+
+/* ---- Boss: walks the floor line carrying the parcel ---- */
+
+#boss {
+  position: absolute;
+  bottom: var(--floor-y, 9%);     /* bottom-anchored on the floor line */
+  left: 0;
+  width: 7.2%;
+  pointer-events: none;
+  z-index: 6;
+  /* walk segment: JS sets --walk-ms (2000–4000ms), linear stride */
+  transition: transform var(--walk-ms, 3000ms) linear;
+  will-change: transform;
+}
+
+#boss img {
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+/* 2-frame stride: JS toggles .frame-b on #boss at ~6fps while .walking */
+#boss .frame-b { display: none; }
+#boss.frame-b .frame-a { display: none; }
+#boss.frame-b .frame-b { display: block; }
+
+/* parcel token held by the boss while walking (decorative) */
+#boss .parcel {
+  position: absolute;
+  top: -18%;
+  right: -10%;
+  width: 45%;
+}
+
+/* ---- Idle bob for the 8 workers: <=4px amplitude, >=1.5s period ---- */
+
+.villager,
+.worker {
+  position: absolute;
+  pointer-events: none;
+}
+
+.idle-bob,
+.villager .bob,
+.worker .bob {
+  animation: idle-bob 2s ease-in-out infinite;
+}
+
+.villager:nth-child(odd) .bob,
+.worker:nth-child(odd) .bob,
+.idle-bob:nth-child(odd) {
+  animation-delay: -1s;
+  animation-duration: 2.4s;
+}
+
+@keyframes idle-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-0.1875rem); } /* 3px <= 4px */
+}
+
+/* ---- Chimney smoke: 3 staggered puffs, transform+opacity only ---- */
+
+.smoke,
+.chimney-smoke {
+  position: absolute;
+  pointer-events: none;
+}
+
+.smoke .puff,
+.chimney-smoke .puff,
+.smoke-puff {
+  opacity: 0.35;              /* static base: visible faint puff when loops stop */
+  animation: smoke-drift 4.5s linear infinite;
+  will-change: transform, opacity;
+}
+
+.smoke .puff:nth-child(2),
+.chimney-smoke .puff:nth-child(2) { animation-delay: 1.5s; }
+
+.smoke .puff:nth-child(3),
+.chimney-smoke .puff:nth-child(3) { animation-delay: 3s; }
+
+@keyframes smoke-drift {
+  0%   { transform: translate(0, 0) scale(0.8); opacity: 0; }
+  18%  { opacity: 0.55; }
+  100% { transform: translate(0.625rem, -2.75rem) scale(1.3); opacity: 0; }
+}
+
+/* ---- Fireplace glow: slow, subtle opacity pulse ---- */
+
+.fire-glow,
+.fireplace-glow {
+  pointer-events: none;
+  opacity: 0.7;               /* static base when loops stop */
+  animation: fire-glow 3s ease-in-out infinite;
+}
+
+@keyframes fire-glow {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.85; }
+}
+
+/* ---- Done sparkle: <=3 pulses/sec, warm tones, no white strobe ---- */
+
+.sparkle,
+.done-sparkle {
+  pointer-events: none;
+  opacity: 1;                 /* static icon when loops stop */
+  animation: sparkle-pulse 0.8s ease-in-out 6; /* 1.25 pulses/sec, finite */
+}
+
+@keyframes sparkle-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(0.78); opacity: 0.45; }
+}
+
+/* ---- Error "!" bubble: quick ease-out pop, then gentle bob ---- */
+
+.alert-bubble,
+.error-bubble {
+  pointer-events: none;
+  opacity: 1;                 /* static icon when loops stop */
+  animation:
+    bubble-in 0.22s var(--ease-out) 1,            /* feedback 100–300ms */
+    idle-bob 1.6s ease-in-out 0.22s infinite;     /* <=4px, >=1.5s */
+}
+
+@keyframes bubble-in {
+  from { transform: translateY(0.375rem) scale(0.6); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* ---- Animation pause toggle (body.anim-paused) ---- */
+
+.anim-paused *,
+.anim-paused *::before,
+.anim-paused *::after {
+  animation-play-state: paused !important;
+}
+
+/* decorative movers: freeze their transitions too (moves become instant) */
+.anim-paused #boss,
+.anim-paused #token,
+.anim-paused .actor,
+.anim-paused .paper,
+.anim-paused .farmhouse * {
+  transition: none !important;
+}
+
+/* ---------- Controls: wooden buttons + select ---------- */
 
 button {
   font: inherit;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   cursor: pointer;
   padding: 0.5rem 1rem;
   min-height: 2.75rem;            /* comfortable target size */
-  color: var(--neon-green);
-  background: var(--bg);
-  border: 2px solid var(--neon-green);
-  box-shadow: 0.25rem 0.25rem 0 rgba(57, 255, 20, 0.35);
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--wood-dark);
+  border-radius: 0.5rem;
+  box-shadow:
+    inset 0 0 0 2px var(--wood-hi),
+    0.25rem 0.25rem 0 rgba(84, 51, 26, 0.35);
+  transition: transform 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
 }
 
 button:hover {
-  background: #12230f;
+  background: var(--bg);
 }
 
 button:active {
   transform: translate(0.125rem, 0.125rem);
-  box-shadow: 0.125rem 0.125rem 0 rgba(57, 255, 20, 0.35);
+  box-shadow:
+    inset 0 0 0 2px var(--wood-hi),
+    0.125rem 0.125rem 0 rgba(84, 51, 26, 0.35);
 }
 
 button:disabled,
 button[aria-disabled="true"] {
   cursor: not-allowed;
-  color: var(--ink-dim);
-  border-color: var(--line);
-  background: var(--surface);
+  color: var(--ink-dim);          /* ~6.9:1 on the muted bg */
+  border-color: var(--wood);
+  background: #ece0c2;
   box-shadow: none;
 }
 
+/* primary action: gold BACKGROUND with #3a2417 text (~7:1) — allowed use */
 #btn-demo {
-  color: var(--neon-cyan);
-  border-color: var(--neon-cyan);
-  box-shadow: 0.25rem 0.25rem 0 rgba(0, 255, 255, 0.35);
+  color: var(--ink);
+  background: var(--gold);
+  border-color: var(--wood-dark);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 246, 221, 0.55),
+    0.25rem 0.25rem 0 rgba(84, 51, 26, 0.35);
 }
 
 #btn-demo:hover {
-  background: #0c2023;
+  background: #eab94f;
 }
 
-/* Sound toggle: constant label, visible LED on/off indicator (shape + fill) */
-#btn-sound {
+/* Toggles: constant label, visible LED on/off indicator (shape + fill) */
+#btn-sound,
+#btn-anim {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-#btn-sound::before {
+#btn-sound::before,
+#btn-anim::before {
   content: "";
   flex: none;
   width: 0.75rem;
   height: 0.75rem;
   border: 2px solid currentColor;
+  border-radius: 0.1875rem;
   background: transparent;      /* OFF = hollow */
 }
 
-#btn-sound[aria-pressed="true"]::before {
-  background: currentColor;     /* ON = filled, shape change, not color-only */
-  box-shadow: 0 0 0.5rem rgba(57, 255, 20, 0.6);
+#btn-sound[aria-pressed="true"]::before,
+#btn-anim[aria-pressed="true"]::before {
+  background: currentColor;     /* ON = filled: shape change, not color-only */
 }
 
 label,
@@ -556,13 +981,20 @@ select,
   padding: 0.4rem 0.6rem;
   min-height: 2.75rem;
   color: var(--ink);
-  background: var(--bg);
-  border: 2px solid var(--line);
+  background: var(--surface);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
 }
 
 select:hover,
 #speed:hover {
-  border-color: var(--neon-cyan);
+  border-color: var(--wood-dark);
+}
+
+select:disabled,
+#speed:disabled {
+  color: var(--ink-dim);
+  background: #ece0c2;
 }
 
 /* ---------- Status line (role="status") ---------- */
@@ -572,13 +1004,19 @@ select:hover,
   max-width: 73rem;
   margin: 1rem auto;
   padding: 0.4rem 0.75rem;
-  color: var(--neon-green);
-  background: var(--surface);
-  border-left: 0.375rem solid var(--neon-green);
+  color: var(--state-done);
+  background: var(--surface-2);
+  border-left: 0.375rem solid var(--state-done);
+  border-radius: 0 0.375rem 0.375rem 0;
 }
 
+/* idle (empty) status: fully invisible — no stray bare chip floating
+   between the crew cards and the feed; min-height above still reserves
+   the space, so layout and the role="status" region are untouched */
 #status:empty {
-  border-left-color: var(--line);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 /* ---------- Event feed (role="log") ---------- */
@@ -593,9 +1031,8 @@ select:hover,
 .feed-log {
   max-height: 22rem;
   overflow-y: auto;
-  border: 2px solid var(--line);
-  background: var(--surface);
-  scrollbar-color: var(--line) var(--bg);
+  background: var(--parchment-deep);
+  scrollbar-color: var(--wood) var(--parchment-deep);
 }
 
 #feed {
@@ -606,8 +1043,8 @@ select:hover,
 
 #feed li {
   padding: 0.4rem 0.75rem;
-  border-bottom: 1px solid #2a2a2a;
-  border-left: 0.375rem solid var(--line);
+  border-bottom: 1px solid rgba(138, 90, 43, 0.35);
+  border-left: 0.375rem solid var(--wood);
   color: var(--ink);
   overflow-wrap: anywhere;
 }
@@ -620,17 +1057,20 @@ select:hover,
 #feed time,
 #feed small {
   color: var(--ink-dim);
-  font-size: 0.875rem;
+  font-size: 1.125rem;
   margin-right: 0.5rem;
 }
 
-/* event-type accents via left border (color + the message text itself) */
-#feed li[data-type^="driver"]      { border-left-color: var(--neon-cyan); }
-#feed li[data-type^="tester"]      { border-left-color: var(--neon-magenta); }
-#feed li[data-type="tester.ok"]    { border-left-color: var(--neon-green); }
-#feed li[data-type="tester.bounce"]{ border-left-color: var(--neon-red); }
-#feed li[data-type="task.done"]    { border-left-color: var(--neon-green); color: var(--neon-green); }
-#feed li[data-type="task.failed"]  { border-left-color: var(--neon-red); color: var(--neon-red); }
+/* event-type accents via left border, darkened set only
+   (color + the message text itself, never color alone) */
+#feed li[data-type^="driver"]       { border-left-color: var(--state-working); }
+#feed li[data-type^="tester"]       { border-left-color: var(--state-testing); }
+#feed li[data-type="tester.ok"]     { border-left-color: var(--state-done); }
+#feed li[data-type="tester.bounce"] { border-left-color: var(--state-error); }
+#feed li[data-type="task.done"]     { border-left-color: var(--state-done); color: var(--state-done); }
+#feed li[data-type="task.failed"]   { border-left-color: var(--state-error); color: var(--state-error); }
+#feed li[data-type="error"]         { border-left-color: var(--state-error); }
+#feed li[data-type="sound"]         { border-left-color: var(--state-idle); color: var(--ink-dim); }
 
 /* ---------- Footer ---------- */
 
@@ -639,7 +1079,7 @@ footer {
   margin: 0 auto;
   padding: 1rem;
   color: var(--ink-dim);
-  border-top: 2px solid var(--line);
+  border-top: 0.1875rem dashed var(--wood);
 }
 
 /* ---------- Small screens: reflow at 320px ---------- */
@@ -671,9 +1111,14 @@ footer {
   .controls select {
     width: 100%;
   }
+
+  .farmhouse {
+    border-radius: 0.5rem;
+  }
 }
 
-/* ---------- Reduced motion: instant token, no loops, no blink ---------- */
+/* ---------- Reduced motion: instant moves, no loops, static icons ----------
+   (app.js mirrors this via matchMedia: walk/token become instant) */
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -685,13 +1130,41 @@ footer {
     scroll-behavior: auto !important;
   }
 
-  #token {
-    transition: none; /* token jumps instantly between zones */
+  #token,
+  #boss,
+  .actor,
+  .paper {
+    transition: none !important; /* movers jump instantly to final poses */
+    animation: none !important;
+  }
+
+  /* smoke / bob / stride / glow stop; sparkle and "!" bubble fall back to
+     their static base styles (opacity fade <= 0.3s remains allowed) */
+  .smoke .puff,
+  .chimney-smoke .puff,
+  .smoke-puff,
+  .fire-glow,
+  .fireplace-glow,
+  .idle-bob,
+  .villager .bob,
+  .worker .bob,
+  .sparkle,
+  .done-sparkle,
+  .alert-bubble,
+  .error-bubble {
+    animation: none !important;
+  }
+
+  .alert-bubble,
+  .error-bubble,
+  .sparkle,
+  .done-sparkle {
+    transition: opacity 0.3s ease-out; /* the only motion left: a short fade */
   }
 
   section[data-zone][data-state="error"] {
-    animation: none;  /* static red border instead of blinking */
-    border-color: var(--neon-red);
+    animation: none;  /* static error border instead of blinking */
+    border-color: var(--state-error);
   }
 }
 
@@ -700,12 +1173,15 @@ footer {
 @media (forced-colors: active) {
   section[data-zone],
   #feed,
+  .farmhouse,
   button,
   select {
     border-color: CanvasText;
   }
 
-  #token {
-    forced-color-adjust: none; /* keep the sprite visible; it is decorative */
+  #token,
+  #boss img,
+  .farmhouse img {
+    forced-color-adjust: none; /* keep the sprites visible; they are decorative */
   }
 }

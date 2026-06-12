@@ -36,7 +36,7 @@ claude-farm/
 │   ├── orchestrator.mjs  # Главный Агент: маршрут по зонам, баунсы, лимит попыток
 │   ├── events.mjs        # шина событий: seq+ts, история (500), JSONL-лог, подписки
 │   ├── agents.mjs        # sim-агенты (детерминированные) и claude-агенты (real-режим)
-│   └── server.mjs        # http-сервер: статика дашборда, SSE /events, /api/state, /api/demo
+│   └── server.mjs        # http-сервер: статика дашборда, SSE /events, /api/state, /api/demo, /api/event
 ├── dashboard/
 │   ├── index.html        # карта дома, бельевая верёвка прогресса, лента событий
 │   ├── style.css         # пиксель-арт, состояния зон, анимация жетона
@@ -46,6 +46,17 @@ claude-farm/
 ├── test/                 # node --test
 └── output/               # результаты задач: <taskId>/result.csv + manifest.json (+ zip)
 ```
+
+## Режим Главного Агента (Claude)
+
+Ферма умеет работать не только на встроенных sim-агентах: внешний оркестратор — например, Claude Code в роли Главного Агента — выполняет работу зон своими субагентами и транслирует каждый шаг на дашборд через `POST /api/event`:
+
+```bash
+curl -s -X POST localhost:8787/api/event \
+  -d '{"type":"zone.enter","taskId":"boss-1","zone":"kitchen","message":"Задача переходит в зону «Кухня — Сборка»"}'
+```
+
+Допустимые `type`: `task.created`, `zone.enter`, `driver.start`, `driver.done`, `tester.start`, `tester.ok`, `tester.bounce`, `task.done`, `task.failed`. Дашборд отображает внешние события точно так же, как события встроенной фермы: токен ходит по зонам, прищепки двигаются, лента пишется.
 
 ## Быстрый старт
 

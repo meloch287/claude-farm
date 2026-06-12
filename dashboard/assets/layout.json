@@ -1,0 +1,42 @@
+{
+  "lane": { "y": 436 },
+  "anchors": {
+    "cabinet": { "x": 70 },
+    "kitchen": { "x": 245 },
+    "corridor": { "x": 445 },
+    "living": { "x": 645 },
+    "bath": { "x": 855 }
+  },
+  "workers": {
+    "scraper": { "x": 190, "y": 420 },
+    "cleaner": { "x": 300, "y": 420 },
+    "editor": { "x": 390, "y": 420 },
+    "validator": { "x": 500, "y": 420 },
+    "runner": { "x": 590, "y": 420 },
+    "sniffer": { "x": 700, "y": 420 },
+    "archiver": { "x": 790, "y": 420 },
+    "signoff": { "x": 910, "y": 420 }
+  },
+  "zones": {
+    "kitchen": {
+      "door": { "x": 145 },
+      "driver": { "id": "scraper", "seat": { "x": 242 }, "desk": { "x": 212 } },
+      "tester": { "id": "cleaner", "seat": { "x": 314 }, "desk": { "x": 284 } }
+    },
+    "corridor": {
+      "door": { "x": 380 },
+      "driver": { "id": "editor", "seat": { "x": 402 }, "desk": { "x": 372 } },
+      "tester": { "id": "validator", "seat": { "x": 494 }, "desk": { "x": 464 } }
+    },
+    "living": {
+      "door": { "x": 545 },
+      "driver": { "id": "runner", "seat": { "x": 602 }, "desk": { "x": 572 } },
+      "tester": { "id": "sniffer", "seat": { "x": 676 }, "desk": { "x": 646 } }
+    },
+    "bath": {
+      "door": { "x": 745 },
+      "driver": { "id": "archiver", "seat": { "x": 802 }, "desk": { "x": 776 } },
+      "tester": { "id": "signoff", "seat": { "x": 898 }, "desk": { "x": 872 } }
+    }
+  }
+}
