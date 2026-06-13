@@ -83,19 +83,26 @@
 
 html {
   background: var(--bg);
-  /* 80% density (boss order): the whole rem grid compresses to 0.8x;
-     1rem = 12.8px. Every floor is cleared with margin
-     (body 1.25rem = 16px, PS2P h2 1.5rem = 19.2px) */
-  font-size: 80%;
+  /* 90% density (boss order): the whole rem grid sits at 0.9x;
+     1rem = 14.4px. Every legibility floor is cleared with margin
+     (body 1.25rem = 18px, PS2P h2 1.5rem = 21.6px). Container maxima
+     stay px-pinned (main 1200 / farmhouse 1040 / status was 1168) so the
+     ~12.5% larger rem text grows inside a fixed footprint — the long
+     zone h2 («Амбар — Обработка») and board-col h3 were verified not to
+     wrap past two reserved lines at this size. */
+  font-size: 90%;
 }
 
 body {
   margin: 0;
-  /* page-level air: content never touches the viewport edges; generous
-     bottom padding so the page never ends flush against the last panel.
+  /* page-level air: content never touches the viewport edges. The bottom
+     padding (5rem) reserves room for the fixed #status bar so it never
+     covers the last panel, and scroll-padding-bottom keeps focused/anchored
+     content clear of the bar when scrolled into view.
      overflow-x: clip absorbs the scrollbar-width sliver of the 100vw
      full-bleed board breakout (no stray horizontal scrollbar). */
-  padding: 0 1.5rem 3rem;
+  padding: 0 1.5rem 5rem;
+  scroll-padding-bottom: 4rem;
   overflow-x: clip;
   min-height: 100vh;
   color: var(--ink);
@@ -451,7 +458,7 @@ header .toolbar {
 
 #board-select {
   font: inherit;
-  min-height: 2.75rem;          /* comfortable target */
+  min-height: max(2.75rem, 44px); /* 44px floor holds at 90% density */
   flex: 1 1 12rem;
   max-width: 22rem;
   padding: 0.5rem 0.75rem;
@@ -552,6 +559,13 @@ section[data-zone] h2 {
   color: var(--ink);
   border-bottom: 2px solid var(--state-color);
   padding-bottom: 0.4rem;
+  /* 90% density verify (boss RISK): at 90% the long title «Амбар —
+     Обработка» rendered ~12.5% larger and a single token clipped the
+     narrowest 4-col column. Drop to 1.4rem (computed 20.16px, still well
+     above the 14px PS2P floor) and allow a rare over-long token to break
+     so the title always fits inside the two reserved heading lines. */
+  font-size: 1.4rem;
+  overflow-wrap: anywhere;
 }
 
 /* Reserve two heading lines whenever zone cards sit side by side, so the
@@ -1161,7 +1175,10 @@ button {
   letter-spacing: 0.04em;
   cursor: pointer;
   padding: 0.5rem 1rem;
-  min-height: 2.75rem;            /* comfortable target size */
+  /* comfortable target: max(2.75rem, 44px) keeps a hard 44px floor even at
+     90% density (where 2.75rem = 39.6px), so touch targets never shrink
+     below the WCAG comfortable size when the rem grid is scaled down */
+  min-height: max(2.75rem, 44px);
   color: var(--ink);
   background: var(--surface);
   border: 2px solid var(--wood-dark);
@@ -1285,7 +1302,7 @@ select,
 #speed {
   font: inherit;
   padding: 0.4rem 0.6rem;
-  min-height: 2.75rem;
+  min-height: max(2.75rem, 44px); /* 44px floor holds at 90% density */
   color: var(--ink);
   background: var(--surface);
   border: 2px solid var(--wood);
@@ -1303,26 +1320,41 @@ select:disabled,
   background: #ece0c2;
 }
 
-/* ---------- Status line (role="status") ---------- */
-
+/* ---------- Status line (role="status") ----------
+   VISIBLE STATUS BAR (boss: announcements «не видно», «чуть ниже скролл»):
+   the single #status node stays exactly where it is in <main> (app.js holds
+   it by id and only swaps textContent + aria-live — never moved/wrapped/
+   duplicated, so no double-announce). CSS-only: pin it to the viewport
+   bottom as a full-width strip so every announcement is always on screen.
+   body padding-bottom (5rem) + scroll-padding reserve the room so the bar
+   never covers the last panel; #status:empty collapses it so an empty bar
+   never floats. assertive->polite restore + announce timing live in app.js,
+   untouched. */
 #status {
-  min-height: 2.25rem;            /* reserve space, avoid layout shift */
-  max-width: 1168px;              /* px: slightly inset from the 1200px column */
-  margin: 1.5rem auto;
-  padding: 0.4rem 0.75rem;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  margin: 0;
+  max-width: none;
+  padding: 0.5rem clamp(1rem, 3vw, 1.5rem);
+  text-align: center;
   color: var(--state-done);
   background: var(--surface-2);
-  border-left: 0.375rem solid var(--state-done);
-  border-radius: 0 0.375rem 0.375rem 0;
+  border-left: 0;
+  border-top: 0.25rem solid var(--state-done);
+  box-shadow: 0 -0.25rem 0.75rem rgba(84, 51, 26, 0.18);
+  transition: none;
 }
 
-/* idle (empty) status: fully invisible — no stray bare chip floating
-   under the view sections; min-height above still reserves the space,
-   so layout and the role="status" region are untouched */
+/* idle (empty) status: fully collapsed — no stray bar floating at the
+   bottom of the viewport; the role="status" region stays in the DOM */
 #status:empty {
-  background: transparent;
-  border-color: transparent;
+  padding: 0;
+  border: 0;
   box-shadow: none;
+  background: transparent;
 }
 
 /* ---------- Room signs: wooden planks over each room top ----------
@@ -1384,7 +1416,7 @@ select:disabled,
 #task-form textarea {
   font: inherit;
   width: 100%;
-  min-height: 2.75rem;
+  min-height: max(2.75rem, 44px); /* 44px floor holds at 90% density */
   padding: 0.5rem 0.75rem;
   color: var(--ink);
   background: var(--surface);
@@ -1525,6 +1557,13 @@ select:disabled,
   padding-bottom: 0.4rem;
   border-bottom: 2px solid var(--wood);
   color: var(--ink);
+  /* 90% density verify (boss RISK): at 90% «Обработка (0)» grew enough that
+     the single word + glued count overran the 6-col board column. 1.4rem
+     alone was still ~10px too wide, so also allow the over-long token to
+     break — together they keep the heading inside the two reserved lines.
+     1.4rem computes to 20.16px, clear of the 14px PS2P floor. */
+  font-size: 1.4rem;
+  overflow-wrap: anywhere;
   /* farm titles («Амбар — Обработка») may wrap to a second line; the
      count is glued to the last word with &nbsp; in the markup so it can
      never orphan. min-height reserves two lines: lists across columns
@@ -1669,7 +1708,10 @@ select:disabled,
 
 dialog {
   width: min(700px, calc(100vw - 4rem));
-  max-height: calc(100vh - 6rem);
+  /* dvh (not vh): on iOS the dynamic toolbar shrinks the visible area —
+     100vh would push the dialog bottom (and its actions) under the toolbar.
+     dvh tracks the actually-visible viewport so the panel always fits. */
+  max-height: calc(100dvh - 6rem);
   overflow: auto;
   padding: 1.75rem 2rem;
   color: var(--ink);
@@ -1791,7 +1833,7 @@ dialog input:not([type="radio"]):not([type="checkbox"]),
 #task-config input:not([type="radio"]):not([type="checkbox"]) {
   font: inherit;
   width: 100%;
-  min-height: 2.75rem;
+  min-height: max(2.75rem, 44px); /* 44px floor holds at 90% density */
   padding: 0.5rem 0.75rem;
   color: var(--ink);
   background: var(--surface);
@@ -1822,7 +1864,7 @@ dialog select,
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  min-height: 2.75rem;
+  min-height: max(2.75rem, 44px); /* 44px floor holds at 90% density */
   cursor: pointer;
   list-style: none;            /* custom wood chevron below */
   font-size: 1.5rem;           /* computed 14.4px — interactive control floor */
@@ -1885,8 +1927,16 @@ footer {
     max-width: 100%;
   }
 
+  /* phone: narrower columns so a ~360px viewport reveals ~1.2 columns
+     (the next column peeks, signalling the horizontal scroll). The board
+     stays a single-axis horizontal scroll — no tabindex, no focus trap,
+     natural keyboard/touch scrolling preserved. */
   .board {
-    gap: 0.75rem;            /* columns keep min-width 13rem and scroll */
+    gap: 0.75rem;
+  }
+
+  .board-col {
+    min-width: 16rem;
   }
 
   #stages {
@@ -1904,8 +1954,58 @@ footer {
     width: 100%;
   }
 
+  /* farmhouse hero: width:100% (already capped 1040px) + locked aspect-ratio
+     means it scales straight down with the viewport — nothing clips at
+     320px; just soften the frame corners on the tightest screens */
   .farmhouse {
     border-radius: 0.5rem;
+  }
+
+  /* board view full-bleed padding tightens so cards keep their width on a
+     360px phone; the single-axis horizontal scroll is unchanged */
+  #board-view:not([hidden]) {
+    padding: 1.5rem 1rem 2.5rem;
+  }
+
+  /* task form fills the column (single-axis reflow, SC 1.4.10) */
+  #task-form {
+    padding: 1.25rem 1rem;
+  }
+
+  /* Settings <dialog> at 320px: near-full-bleed sheet. dvh (not vh) keeps
+     the bottom actions clear of the iOS toolbar; actions stack full-width
+     so each is an easy single-column tap target. */
+  dialog {
+    width: calc(100vw - 2rem);
+    max-height: calc(100dvh - 2rem);
+    padding: 1.25rem 1rem;
+  }
+
+  .dialog-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dialog-actions button {
+    width: 100%;
+  }
+}
+
+/* ---------- Tablet: >=37rem (~592px) ----------
+   Between the phone reflow and the wide-header grid (>=75rem). The zone
+   grid is already 2-col here (.zone-grid drops to 1-col only <=33.75rem);
+   give the board-bar and form actions a touch more breathing room and let
+   the board columns sit a little narrower so more of the 6 columns are in
+   view before the horizontal scroll kicks in. Touch targets (>=2.75rem)
+   and flex-wrap gaps (>=0.5rem) are inherited from the base rules. */
+@media (min-width: 37rem) {
+  .board-col {
+    min-width: 17rem;          /* ~3 columns visible on a portrait tablet */
+  }
+
+  #task-form .form-actions,
+  .dialog-actions {
+    gap: 1rem;
   }
 }
 
