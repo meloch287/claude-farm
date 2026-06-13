@@ -434,6 +434,107 @@
     <rect x="922" y="348" width="4" height="4" fill="#3a6e1f"/>
   </g>
 
+  <!-- ======== ОКРУЖЕНИЕ: живность и зелень (спокойно, не загромождая) ======== -->
+  <!-- держим дорожку (y 400-440) свободной: всё на траве выше или у строений -->
+  <g shape-rendering="crispEdges">
+    <!-- кот дремлет у крыльца дома (свернулся калачиком на приступке) -->
+    <g>
+      <rect x="104" y="384" width="28" height="8" fill="#caa05a"/>
+      <rect x="104" y="388" width="28" height="4" fill="#a8803e"/>
+      <rect x="100" y="388" width="8" height="4" fill="#caa05a"/>
+      <rect x="100" y="384" width="4" height="4" fill="#caa05a"/>
+      <rect x="104" y="380" width="6" height="4" fill="#caa05a"/>
+      <rect x="104" y="378" width="2" height="2" fill="#caa05a"/>
+      <rect x="108" y="378" width="2" height="2" fill="#caa05a"/>
+      <rect x="105" y="382" width="2" height="2" fill="#3a2417"/>
+      <rect x="128" y="382" width="6" height="4" fill="#caa05a"/>
+      <rect x="132" y="380" width="2" height="4" fill="#a8803e"/>
+    </g>
+
+    <!-- две курицы у Поля (клюют у грядки, выше дорожки) -->
+    <g>
+      <!-- курица 1 -->
+      <rect x="208" y="384" width="12" height="10" fill="#f3ead2"/>
+      <rect x="208" y="390" width="12" height="4" fill="#d9ccab"/>
+      <rect x="218" y="380" width="6" height="6" fill="#f3ead2"/>
+      <rect x="222" y="382" width="2" height="2" fill="#c44b34"/>
+      <rect x="224" y="384" width="2" height="2" fill="#e3a93a"/>
+      <rect x="219" y="381" width="2" height="2" fill="#2b2421"/>
+      <rect x="219" y="378" width="4" height="2" fill="#c44b34"/>
+      <rect x="210" y="394" width="2" height="4" fill="#e3a93a"/>
+      <rect x="216" y="394" width="2" height="4" fill="#e3a93a"/>
+      <!-- курица 2 (поменьше, клюёт вниз) -->
+      <rect x="252" y="388" width="10" height="8" fill="#e8d9b0"/>
+      <rect x="252" y="392" width="10" height="4" fill="#cfc090"/>
+      <rect x="248" y="390" width="6" height="6" fill="#e8d9b0"/>
+      <rect x="246" y="394" width="2" height="2" fill="#e3a93a"/>
+      <rect x="249" y="391" width="2" height="2" fill="#2b2421"/>
+      <rect x="248" y="388" width="4" height="2" fill="#c44b34"/>
+      <rect x="254" y="396" width="2" height="2" fill="#e3a93a"/>
+      <rect x="259" y="396" width="2" height="2" fill="#e3a93a"/>
+      <!-- зёрнышки на земле -->
+      <rect x="232" y="396" width="2" height="2" fill="#bd9638"/>
+      <rect x="238" y="397" width="2" height="2" fill="#bd9638"/>
+      <rect x="244" y="396" width="2" height="2" fill="#bd9638"/>
+    </g>
+
+    <!-- подсолнух у края Поля (склонился к солнцу) -->
+    <g>
+      <rect x="344" y="316" width="4" height="84" fill="#4f8f2c"/>
+      <rect x="340" y="340" width="4" height="8" fill="#3a6e1f"/>
+      <rect x="332" y="344" width="10" height="6" fill="#5f8f3a"/>
+      <rect x="348" y="356" width="10" height="6" fill="#5f8f3a"/>
+      <!-- цветок наклонён вправо-вверх -->
+      <rect x="340" y="300" width="20" height="16" fill="#e0bd55"/>
+      <rect x="344" y="296" width="12" height="24" fill="#e0bd55"/>
+      <rect x="336" y="304" width="4" height="8" fill="#bd9638"/>
+      <rect x="360" y="304" width="4" height="8" fill="#bd9638"/>
+      <rect x="346" y="304" width="8" height="8" fill="#6b4226"/>
+      <rect x="348" y="306" width="4" height="4" fill="#8a5a2b"/>
+    </g>
+
+    <!-- горшки с рассадой у двери теплицы -->
+    <g>
+      <rect x="734" y="384" width="14" height="14" fill="#b85c38"/>
+      <rect x="734" y="394" width="14" height="4" fill="#8f4326"/>
+      <rect x="738" y="372" width="4" height="12" fill="#4f8f2c"/>
+      <rect x="734" y="372" width="4" height="4" fill="#79a943"/>
+      <rect x="742" y="376" width="4" height="4" fill="#79a943"/>
+      <rect x="746" y="386" width="12" height="12" fill="#caa05a"/>
+      <rect x="746" y="394" width="12" height="4" fill="#9c6b33"/>
+      <rect x="750" y="376" width="4" height="10" fill="#4f8f2c"/>
+      <rect x="746" y="376" width="4" height="4" fill="#79a943"/>
+      <rect x="754" y="380" width="4" height="4" fill="#79a943"/>
+    </g>
+
+    <!-- гирлянда овощей под навесом Рынка (перец/лук, висят) -->
+    <g>
+      <rect x="784" y="280" width="2" height="12" fill="#6b4226"/>
+      <rect x="780" y="292" width="10" height="6" fill="#c44b34"/>
+      <rect x="782" y="298" width="6" height="4" fill="#8f2f1c"/>
+      <rect x="812" y="280" width="2" height="16" fill="#6b4226"/>
+      <rect x="808" y="296" width="10" height="6" fill="#e3a93a"/>
+      <rect x="810" y="302" width="6" height="4" fill="#bd9638"/>
+      <rect x="840" y="280" width="2" height="10" fill="#6b4226"/>
+      <rect x="836" y="290" width="10" height="6" fill="#c44b34"/>
+      <rect x="838" y="296" width="6" height="4" fill="#8f2f1c"/>
+    </g>
+
+    <!-- бабочки (две, в воздухе над лугом) -->
+    <g>
+      <rect x="420" y="150" width="2" height="2" fill="#54331a"/>
+      <rect x="416" y="148" width="4" height="6" fill="#e3a93a"/>
+      <rect x="422" y="148" width="4" height="6" fill="#e3a93a"/>
+      <rect x="417" y="150" width="2" height="2" fill="#c44b34"/>
+      <rect x="423" y="150" width="2" height="2" fill="#c44b34"/>
+      <rect x="676" y="172" width="2" height="2" fill="#54331a"/>
+      <rect x="672" y="170" width="4" height="6" fill="#6fb7e0"/>
+      <rect x="678" y="170" width="4" height="6" fill="#6fb7e0"/>
+      <rect x="673" y="172" width="2" height="2" fill="#bfe3f4"/>
+      <rect x="679" y="172" width="2" height="2" fill="#bfe3f4"/>
+    </g>
+  </g>
+
   <!-- ======== МЕЖЕВЫЕ СТОЛБИКИ У ДОРОЖКИ ======== -->
   <g>
     <rect x="136" y="372" width="8" height="28" fill="#8a5a2b"/><rect x="136" y="368" width="8" height="4" fill="#6b4226"/>

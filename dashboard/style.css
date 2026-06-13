@@ -240,11 +240,12 @@ header.site-header,
 .site-header {
   background: var(--surface);
   border: 0.25rem solid var(--wood);
-  border-radius: 0.75rem;
+  border-radius: 0.875rem;     /* polish: slightly softer corners (0.75→0.875) */
   box-shadow:
     0 0 0 0.1875rem var(--wood-dark),
     inset 0 0 0 0.1875rem var(--wood-hi),
-    0 0.375rem 0 rgba(84, 51, 26, 0.18);
+    0 0.375rem 0 rgba(84, 51, 26, 0.18),
+    0 0.75rem 1.25rem rgba(84, 51, 26, 0.14); /* polish: warm ambient lift */
 }
 
 /* ---------- Header: warm cream sign-board, clothesline, controls ---------- */
@@ -745,7 +746,29 @@ section[data-zone][data-state="error"] {
   aspect-ratio: 960 / 540;
   margin: 2rem auto 3rem;
   overflow: hidden;
-  background: var(--surface);
+  /* polish: a faint warm sky-gradient sits behind the painted .scene
+     (cream → toasted-cream), so any gaps read as soft daylight, not flat
+     fill. Decorative only; contrast of foreground art is unchanged. */
+  background:
+    linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+}
+
+/* polish: gentle inset vignette over the scene — pure decoration, no
+   pointer capture, sits below the sprite cast (actors z-index 5+) so it
+   never dims the heroes; only softens the painted edges of the dollhouse */
+.farmhouse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      120% 120% at 50% 38%,
+      transparent 60%,
+      rgba(84, 51, 26, 0.10) 100%
+    );
 }
 
 /* the painted scene fills the panel exactly (same 960/540 ratio) */
@@ -953,6 +976,61 @@ section[data-zone][data-state="error"] {
   to   { transform: translateY(0) scale(1); opacity: 1; }
 }
 
+/* ============================================================
+   Particle layer (.fx)
+   Per-zone chore motion is conveyed by the JS swapping each worker's
+   work1/work2 SVG frames (see app.js workAt); on top of that the JS spawns
+   small .fx particles. ALL of it is gated by reduced-motion AND
+   body.anim-paused below — non-negotiable for the aria-hidden scene.
+   ============================================================ */
+
+/* ---- Particle layer ----
+   .fx is the base for every spawned particle. The JS positions a particle
+   absolutely inside .farmhouse (or a chore wrapper), assigns a type
+   modifier, and removes it on animationend. Rendered ~10px, pixelated,
+   pointer-events:none, decorative (lives inside aria-hidden .farmhouse). */
+   Each particle is an <img> whose SVG carries its own colour/shape, so CSS
+   only sizes it (kept SQUARE so coins/drops are not squashed into bars) and
+   gates it; motion is driven solely by the JS Web Animations rise+fade — no
+   CSS @keyframes here, to avoid two animations fighting on one element. */
+.farmhouse .fx,
+.fx {
+  position: absolute;
+  width: 0.95rem;           /* ~12px square at 80% density grid */
+  height: 0.95rem;
+  pointer-events: none;
+  image-rendering: pixelated;
+  z-index: 8;
+  opacity: 0;               /* the JS WAAPI rise owns the fade-in/out */
+  will-change: transform, opacity;
+}
+
+/* ---- Ambient idle: very slow decorative sway (sunflower / butterfly) ----
+   long period, <=4px, gentle — hooks are optional; styles no-op if absent */
+.farmhouse .sunflower,
+.farmhouse .ambient-sway {
+  transform-origin: 50% 100%;
+  animation: ambient-sway 7s ease-in-out infinite;
+  will-change: transform;
+}
+
+.farmhouse .butterfly {
+  animation: butterfly-drift 9s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes ambient-sway {
+  0%, 100% { transform: rotate(-1.5deg) translateX(0); }
+  50%      { transform: rotate(1.5deg) translateX(0.1875rem); } /* <=3px */
+}
+
+@keyframes butterfly-drift {
+  0%, 100% { transform: translate(0, 0); }
+  25%      { transform: translate(0.25rem, -0.1875rem); }
+  50%      { transform: translate(0, -0.25rem); }            /* <=4px */
+  75%      { transform: translate(-0.25rem, -0.1875rem); }
+}
+
 /* ---- Animation pause toggle (body.anim-paused) ---- */
 
 .anim-paused *,
@@ -968,6 +1046,22 @@ section[data-zone][data-state="error"] {
 .anim-paused .paper,
 .anim-paused .farmhouse * {
   transition: none !important;
+}
+
+/* the play-state:paused rule above already halts every loop, but freeze
+   the work/sway loops hard and hide particles so a paused scene shows a
+   single static work pose with no lingering particle mid-flight */
+.anim-paused .worker.working,
+.anim-paused .actor.working,
+.anim-paused .sunflower,
+.anim-paused .ambient-sway,
+.anim-paused .butterfly {
+  animation-play-state: paused !important; /* hold the current work pose */
+}
+
+.anim-paused .fx {
+  animation: none !important;
+  opacity: 0 !important;                    /* no particle frozen mid-air */
 }
 
 /* ---------- Controls: wooden buttons + select ---------- */
@@ -992,6 +1086,13 @@ button {
 
 button:hover {
   background: var(--bg);
+  /* polish: a gentle lift + warmer deeper shadow on hover (the existing
+     transition + :active press-down still win on click); transform-only
+     motion, already covered by the global reduced-motion transition rule */
+  transform: translate(-0.0625rem, -0.0625rem);
+  box-shadow:
+    inset 0 0 0 2px var(--wood-hi),
+    0.3125rem 0.3125rem 0 rgba(84, 51, 26, 0.40);
 }
 
 button:active {
@@ -1763,8 +1864,22 @@ footer {
   .sparkle,
   .done-sparkle,
   .alert-bubble,
-  .error-bubble {
+  .error-bubble,
+  /* new: work loops, ambient sway, and particle motion all stop —
+     the worker holds a single static work pose, no looping, no particles */
+  .worker.working,
+  .actor.working,
+  .sunflower,
+  .ambient-sway,
+  .butterfly,
+  .fx {
     animation: none !important;
+  }
+
+  /* under reduced motion no particle should appear at all (they convey
+     nothing — the work pose is enough); keep them fully hidden */
+  .fx {
+    opacity: 0 !important;
   }
 
   .alert-bubble,

@@ -124,6 +124,27 @@ const BASE_SIT = [
 const CHAIR_PALETTE = { q: '#9c6b33', Q: '#6b4226' };
 
 /* ---------------------------------------------------------------- *
+ * Рабочая палитра — общие ключи для chore-кадров (work1/work2).
+ * Добавляется к палитре КАЖДОГО рабочего, чтобы инструменты и
+ * частицы рисовались одинаково независимо от персонажа.
+ *   j/J — дерево черенка/ручки (светлое/тёмное)
+ *   f/F — металл лезвия/тины (светлое/тёмное)
+ *   u/U — мешок зерна (холст/тень)
+ *   l/L — лейка-металл (корпус/тень), i — струя/капля воды
+ *   a/A — урожай (яблоко/тень), G — золотая монета
+ *   s   — кожа (уже есть у всех), o — контур (уже есть)
+ * ---------------------------------------------------------------- */
+const WORK_PALETTE = {
+  j: '#a9763d', J: '#7a5226',           // черенок (дерево)
+  f: '#c8c2b4', F: '#8f897c',           // металл лезвия
+  u: '#e8d9b0', U: '#c2ab74',           // мешок (холст)
+  l: '#b8c4cc', L: '#7d8a92',           // лейка (оцинковка)
+  i: '#6fb7e0',                          // вода (струя/капля)
+  a: '#c44b34', A: '#8f2f1c',           // урожай (яблоко)
+  G: '#e3b23a',                          // монета (золото)
+};
+
+/* ---------------------------------------------------------------- *
  * Аксессуары — ASCII-патчи в координатах кадра B.
  * В кадре A патч автоматически опускается на 1px вместе с корпусом.
  * '.' — пропустить пиксель, '!' — стереть в прозрачность.
@@ -278,6 +299,302 @@ const SIT_PATCHES = {
   stamp: false, // печать на прилавке
   orangeScarf: { y: 12 },
 };
+
+/* ================================================================ *
+ * РАБОЧИЕ КАДРЫ (chore) — work1 / work2 для 8 рабочих.
+ *
+ * Каждый кадр — патч поверх BASE_B (стоячая поза, ноги вместе):
+ * перерисовывает руку (правый рукав/кисть) и рисует инструмент так,
+ * чтобы пара кадров читалась как ОДНО рабочее движение с дугой.
+ * '!' стирает пиксель в прозрачность, '.' — пропуск.
+ *
+ * Зоны → движение:
+ *   field  (Поле/scraper,cleaner): КОПАТЬ — мотыга вверх / удар в землю
+ *   barn   (Амбар/editor,validator): МЕШКИ — у пояса / на плече
+ *   green  (Теплица/runner,sniffer): ПОЛИВ — лейка ровно / наклон, капли
+ *   market (Рынок/archiver,signoff): ТОРГ — товар у груди / рука вперёд, монета
+ *
+ * Патч начинается с y=10 (плечи) — голову и ноги BASE_B не трогаем.
+ * ================================================================ */
+
+// Полные 16x24 сетки рабочих поз. Тело использует общие ключи
+// (o,h,H,s,c,m,b,B,p,P,k,K) — рендерится в цветах любого персонажа;
+// головной убор персонажа накладывается сверху отдельным патчем.
+// Голова/лицо/ноги совпадают с BASE_B, меняются только руки + инструмент.
+
+const CHORE_FRAMES = {
+  // ===== ПОЛЕ — КОПАТЬ (мотыга, двуручный замах вверх→в землю) =====
+  // Силуэт-читаемость: лезвие мотыги (fF) ВЫНЕСЕНО за контур тела —
+  // в work1 высоко над/сбоку головы, в work2 ушло к земле справа.
+  // Длинный диагональный черенок (jJ) пересекает кадр по диагонали:
+  // пара кадров читается как замах сверху-вниз даже в 16px.
+  // work1: мотыга ЗАНЕСЕНА — лезвие в правом верхнем углу НАД головой,
+  //        черенок диагональю вниз-влево к двум рукам у пояса.
+  field1: [
+    '....oooooooo.fFF', //  0 лезвие мотыги в правом верхнем углу
+    '...ohhhhhhhhofFF', //  1 лезвие над плечом
+    '..ohhhhhhhhhhjJ.', //  2 черенок пошёл от лезвия вниз-влево
+    '..oHhhhhhhhhjJo.', //  3
+    '..ohhsssssssjJ..', //  4 черенок по диагонали мимо лица
+    '..ohsessssesjJo.', //  5
+    '..ohcesssscjJho.', //  6
+    '..ohsssmmsjJsho.', //  7
+    '...ossssssjJoo..', //  8
+    '....oosssjJoo...', //  9 черенок к плечу
+    '...obbbbjJbbo...', // 10
+    '..obbbbsjJbbbo..', // 11 верхняя рука на черенке
+    '..obbbbbjJbbbo..', // 12
+    '..oBbbbbsjsbBo..', // 13 нижняя рука на черенке
+    '..osbBbbbbBbso..', // 14
+    '...oppppppppo...', // 15
+    '...oppppppppo...', // 16
+    '....oppppppo....', // 17
+    '....oppppppo....', // 18
+    '....opPppPpo....', // 19
+    '....oppppppo....', // 20
+    '....okkkkkko....', // 21
+    '....okKkkKko....', // 22
+    '....oooooooo....', // 23
+  ],
+  // work2: УДАР — мотыга прошла вниз, лезвие ВРЕЗАЛОСЬ в землю справа
+  //        от ног (за контуром тела), черенок диагональю снизу-справа
+  //        к рукам; корпус чуть наклонён, кисти вытянуты вперёд-вниз.
+  field2: [
+    '....oooooooo....', //  0
+    '...ohhhhhhhho...', //  1
+    '..ohhhhhhhhhho..', //  2
+    '..oHhhhhhhhhHo..', //  3
+    '..ohhsssssshho..', //  4
+    '..ohsessssesho..', //  5
+    '..ohcessssecho..', //  6
+    '..ohsssmmsssho..', //  7
+    '...osssssssso...', //  8
+    '....oossssoo....', //  9
+    '...obbbbbbbbo...', // 10 плечи
+    '..obbbbbbssbo...', // 11 обе кисти тянутся вперёд-вниз
+    '..obbbbbbsjbo...', // 12 черенок принят руками
+    '..oBbbbbbsjJo...', // 13
+    '..osbBbbbbsjJo..', // 14
+    '...oppppppppjJ..', // 15 черенок диагональю к земле
+    '...oppppppppjJo.', // 16
+    '....opppppppjJ..', // 17
+    '....oppppppojJ..', // 18
+    '....opPppPpojJ..', // 19
+    '....oppppppojJ..', // 20 черенок почти у земли
+    '....okkkkkkofF..', // 21 лезвие у земли справа от ног
+    '....okKkkKkfFF..', // 22 лезвие врезалось в землю
+    '....oooooooofF..', // 23
+  ],
+
+  // ===== АМБАР — ТАСКАТЬ МЕШКИ (перед грудью → вскинут НАД плечом) =====
+  // Силуэт-читаемость: мешок (uU) — крупный бугор, в work2 он ВЫСТУПАЕТ
+  // НАД линией головы справа, меняя верхний контур фигуры — «несёт груз».
+  // work1: пухлый мешок зерна обхвачен обеими руками перед грудью.
+  barn1: [
+    '....oooooooo....', //  0
+    '...ohhhhhhhho...', //  1
+    '..ohhhhhhhhhho..', //  2
+    '..oHhhhhhhhhHo..', //  3
+    '..ohhsssssshho..', //  4
+    '..ohsessssesho..', //  5
+    '..ohcessssecho..', //  6
+    '..ohsssmmsssho..', //  7
+    '...osssssssso...', //  8
+    '...ooouuuuooo...', //  9 верх мешка над плечами
+    '..obouuuuuuobo..', // 10 мешок выпирает вперёд
+    '..obuuUuuUuuubo.', // 11
+    '..obuuuuuuuuubo.', // 12 пухлый объём мешка
+    '..oBsuUuuuuUusBo', // 13 руки обхватывают по бокам
+    '..ossuuuuuuuusso', // 14 кисти снизу держат вес
+    '...oUuuuuuuuUo..', // 15 низ мешка у пояса
+    '...oppppppppo...', // 16
+    '....oppppppo....', // 17
+    '....oppppppo....', // 18
+    '....opPppPpo....', // 19
+    '....oppppppo....', // 20
+    '....okkkkkko....', // 21
+    '....okKkkKko....', // 22
+    '....oooooooo....', // 23
+  ],
+  // work2: мешок ВСКИНУТ на правое плечо — крупный объём ВЫШЕ головы
+  //        и правее (выходит за контур), рука поднята и держит снизу.
+  barn2: [
+    '..........uuuu..', //  0 верх мешка ВЫШЕ головы справа
+    '....oooooouUuuu.', //  1 мешок над плечом
+    '...ohhhhhhuuuUu.', //  2
+    '..ohhhhhhhuuuuuo', //  3 объём мешка выходит за контур
+    '..ohhsssssuUuuuo', //  4
+    '..ohsesssseuuuuo', //  5
+    '..ohcessssuuuUuo', //  6
+    '..ohsssmmssuuuuo', //  7 мешок лежит на плече
+    '...osssssssuUuo.', //  8
+    '....oossssbsuo..', //  9 рука поднята к мешку
+    '...obbbbbbsbo...', // 10 кисть придерживает снизу
+    '..obbbbbbbbbbo..', // 11
+    '..obbbbbbbbbbo..', // 12
+    '..oBbbbbbbbbBo..', // 13
+    '..osbBbbbbBbso..', // 14
+    '...oppppppppo...', // 15
+    '...oppppppppo...', // 16
+    '....oppppppo....', // 17
+    '....oppppppo....', // 18
+    '....opPppPpo....', // 19
+    '....oppppppo....', // 20
+    '....okkkkkko....', // 21
+    '....okKkkKko....', // 22
+    '....oooooooo....', // 23
+  ],
+
+  // ===== ТЕПЛИЦА — ПОЛИВАТЬ (лейка с носиком → наклон, струя вниз) =====
+  // Силуэт-читаемость: корпус лейки (lL) — крупный блок СБОКУ от тела,
+  // носик (fF) ВЫНЕСЕН наружу; в work2 носик опущен и из него идёт
+  // струя (i) к земле — узнаётся жест «поливаю».
+  // work1: лейка поднята сбоку справа, носик торчит наружу горизонтально.
+  green1: [
+    '....oooooooo....', //  0
+    '...ohhhhhhhho...', //  1
+    '..ohhhhhhhhhho..', //  2
+    '..oHhhhhhhhhHo..', //  3
+    '..ohhsssssshho..', //  4
+    '..ohsessssesho..', //  5
+    '..ohcessssecho..', //  6
+    '..ohsssmmsssho..', //  7
+    '...osssssssso...', //  8
+    '....oossssoo.Lo.', //  9 дужка лейки
+    '...obbbbbboLLLo.', // 10 корпус лейки сбоку
+    '..obbbbbbBlllLo.', // 11 рука держит за дужку
+    'fFooobbbbBlllLo.', // 12 носик торчит наружу влево
+    '..oBbbbbbBLllLo.', // 13 корпус лейки
+    '..osbBbbbbBLLo..', // 14 низ лейки
+    '...oppppppppo...', // 15
+    '...oppppppppo...', // 16
+    '....oppppppo....', // 17
+    '....oppppppo....', // 18
+    '....opPppPpo....', // 19
+    '....oppppppo....', // 20
+    '....okkkkkko....', // 21
+    '....okKkkKko....', // 22
+    '....oooooooo....', // 23
+  ],
+  // work2: лейка НАКЛОНЕНА — носик опущен влево-вниз, из него льётся
+  //        струя воды (i) к земле; верх корпуса задран (дужка выше).
+  green2: [
+    '....oooooooo....', //  0
+    '...ohhhhhhhho...', //  1
+    '..ohhhhhhhhhho..', //  2
+    '..oHhhhhhhhhHo..', //  3
+    '..ohhsssssshho..', //  4
+    '..ohsessssesho..', //  5
+    '..ohcessssecho..', //  6
+    '..ohsssmmsssho..', //  7
+    '...osssssssso...', //  8
+    '....oossssooLLo.', //  9 корпус лейки задран
+    '...obbbbbbBlLLo.', // 10 рука держит
+    '..obbbbbbBlllLo.', // 11
+    '..obbbbbbBlllLo.', // 12 корпус наклонён
+    '.fFoBbbbbBLllo..', // 13 носик опущен влево-вниз
+    'iioosbBbbbLLoo..', // 14 струя пошла из носика
+    '.i.oppppppppo...', // 15 струя
+    'i..oppppppppo...', // 16 струя
+    '.i..oppppppo....', // 17 капля
+    'i...oppppppo....', // 18 капля
+    '.i..opPppPpo....', // 19
+    'i...oppppppo....', // 20 капля у земли
+    '....okkkkkko....', // 21
+    '....okKkkKko....', // 22
+    '....oooooooo....', // 23
+  ],
+
+  // ===== РЫНОК — ТОРГОВАТЬ (товар у груди → рука ВЫТЯНУТА с товаром) =====
+  // Силуэт-читаемость: в work2 правая рука с товаром (aA) ВЫТЯНУТА
+  // далеко вправо за контур тела, над ладонью звенит монета (G) —
+  // безошибочный жест «протягиваю товар через прилавок».
+  // work1: корзина яблок (aA) обхвачена обеими руками у груди.
+  market1: [
+    '....oooooooo....', //  0
+    '...ohhhhhhhho...', //  1
+    '..ohhhhhhhhhho..', //  2
+    '..oHhhhhhhhhHo..', //  3
+    '..ohhsssssshho..', //  4
+    '..ohsessssesho..', //  5
+    '..ohcessssecho..', //  6
+    '..ohsssmmsssho..', //  7
+    '...osssssssso...', //  8
+    '....oossssoo....', //  9
+    '...obbbbbbbbo...', // 10
+    '..oboaaaaaaobo..', // 11 яблоки в обхвате у груди
+    '..obaAaaaaAabo..', // 12
+    '..oBsaaaaaaasBo.', // 13 руки держат товар
+    '..ossoaaaaosso..', // 14 кисти снизу корзины
+    '...oppppppppo...', // 15
+    '...oppppppppo...', // 16
+    '....oppppppo....', // 17
+    '....oppppppo....', // 18
+    '....opPppPpo....', // 19
+    '....oppppppo....', // 20
+    '....okkkkkko....', // 21
+    '....okKkkKko....', // 22
+    '....oooooooo....', // 23
+  ],
+  // work2: правая рука ВЫТЯНУТА вправо за контур тела — на раскрытой
+  //        ладони товар (aA), над ним блестит монета (G).
+  market2: [
+    '....oooooooo....', //  0
+    '...ohhhhhhhho...', //  1
+    '..ohhhhhhhhhho..', //  2
+    '..oHhhhhhhhhHo..', //  3
+    '..ohhsssssshho..', //  4
+    '..ohsessssesho..', //  5
+    '..ohcessssecho..', //  6
+    '..ohsssmmsssho..', //  7
+    '...osssssssso...', //  8
+    '....oossssoo.G..', //  9 монета звенит над товаром
+    '...obbbbbbbboaa.', // 10 рука пошла вправо, товар
+    '..obbbbbbbbsaAa.', // 11 предплечье вытянуто
+    '..oBbbbbbbsoaao.', // 12 раскрытая ладонь с товаром
+    '..osbBbbbbBso...', // 13 плечо
+    '...oppppppppo...', // 14
+    '...oppppppppo...', // 15
+    '....oppppppo....', // 16
+    '....oppppppo....', // 17
+    '....oppppppo....', // 18
+    '....opPppPpo....', // 19
+    '....oppppppo....', // 20
+    '....okkkkkko....', // 21
+    '....okKkkKko....', // 22
+    '....oooooooo....', // 23
+  ],
+};
+
+// Назначение chore-кадров по персонажам (зона → пара кадров).
+const WORKER_CHORE = {
+  'char-scraper':   'field',
+  'char-cleaner':   'field',
+  'char-editor':    'barn',
+  'char-validator': 'barn',
+  'char-runner':    'green',
+  'char-sniffer':   'green',
+  'char-archiver':  'market',
+  'char-signoff':   'market',
+};
+
+// Головной убор персонажа, накладываемый поверх рабочего кадра
+// (тело уже нарисовано полной сеткой; нужен только head-патч).
+const HEADWEAR = new Set(['strawHat', 'headwrap', 'headband', 'glasses']);
+
+// Сборка рабочего кадра: полная сетка позы + головной убор персонажа.
+function composeChoreFrame(def, frameName) {
+  const base = CHORE_FRAMES[frameName];
+  if (!base) throw new Error(`Unknown chore frame: ${frameName}`);
+  let grid = base;
+  for (const name of def.patches) {
+    if (!HEADWEAR.has(name)) continue;
+    const patch = PATCHES[name];
+    if (!patch) throw new Error(`Unknown patch: ${name}`);
+    grid = applyPatch(grid, patch, 0, 0);
+  }
+  return grid;
+}
 
 /* ---------------------------------------------------------------- *
  * Бюст-портрет: верхние строки кадра B (макушка..грудь), лицо крупно.
@@ -493,6 +810,83 @@ const PAPER = {
 };
 
 /* ---------------------------------------------------------------- *
+ * FX-частицы — крошечные облачка/капли, выбрасываемые при работе.
+ * Без чёрного контура (мягкие), палитра согласована со сценой.
+ * Каждая 8x8: рисуется поверх грядки/лейки/прилавка и гаснет.
+ *   fx-dirt  — бурый пыльный пшик (КОПАТЬ)
+ *   fx-water — синие капли воды (ПОЛИВ)
+ *   fx-coin  — золотая монетка (ТОРГ)
+ *   fx-sheaf — пшеничный сноп/колоски (урожай, общий мотив)
+ * ---------------------------------------------------------------- */
+
+const FX = {
+  // бурый пыльный пшик — два тона земли, рыхлое облачко
+  'fx-dirt': {
+    width: 8,
+    height: 8,
+    palette: { d: '#b98a52', D: '#8a5a2b', l: '#d4b27e' },
+    grid: [
+      '...l....',
+      '.l.dd.l.',
+      '.dDddD..',
+      'dDddDdDd',
+      '.dDddDd.',
+      '..dDd...',
+      '.l...l..',
+      '........',
+    ],
+  },
+  // синие капли воды — три капли разного размера
+  'fx-water': {
+    width: 8,
+    height: 8,
+    palette: { i: '#6fb7e0', I: '#3f93c8', w: '#bfe3f4' },
+    grid: [
+      '..w.....',
+      '..i...w.',
+      '..I...i.',
+      '......I.',
+      '.w......',
+      '.i...w..',
+      '.I...i..',
+      '.....I..',
+    ],
+  },
+  // золотая монета — кружок с бликом и буртиком
+  'fx-coin': {
+    width: 8,
+    height: 8,
+    palette: { o: '#9c7320', g: '#e3b23a', G: '#f4d873', d: '#b9852e' },
+    grid: [
+      '..oggo..',
+      '.ogGGgo.',
+      'ogGGggdo',
+      'ogGgggdo',
+      'oggggddo',
+      'ogdgddo.',
+      '.oddddo.',
+      '..oddo..',
+    ],
+  },
+  // пшеничный сноп — колоски на стебле, перевязка
+  'fx-sheaf': {
+    width: 8,
+    height: 8,
+    palette: { y: '#e0bd55', Y: '#bd9638', g: '#9c7320', t: '#8a5a2b' },
+    grid: [
+      'y.y..y.y',
+      'Yy.yy.yY',
+      '.YyYYyY.',
+      '..YyyY..',
+      '..ytty..',
+      '..yttyy.',
+      '..ytty..',
+      '..g..g..',
+    ],
+  },
+};
+
+/* ---------------------------------------------------------------- *
  * Сборка и вывод.
  * ---------------------------------------------------------------- */
 
@@ -607,6 +1001,20 @@ for (const [id, def] of Object.entries(CHARACTERS)) {
   if (printMode) printGrid(portraitName, portrait);
   writeFileSync(join(OUT, `${portraitName}.svg`), gridToSvg(portrait, def.palette, W, PORTRAIT_ROWS));
   written.push(`${portraitName}.svg`);
+
+  // Рабочие кадры work1/work2 — чередуются ~3-5 fps, читаются как chore зоны.
+  const zone = WORKER_CHORE[id];
+  if (zone) {
+    const workPalette = { ...def.palette, ...WORK_PALETTE };
+    for (const n of [1, 2]) {
+      const grid = composeChoreFrame(def, `${zone}${n}`);
+      const name = `${id}-work${n}`;
+      validateGrid(name, grid, W, H, workPalette);
+      if (printMode) printGrid(name, grid);
+      writeFileSync(join(OUT, `${name}.svg`), gridToSvg(grid, workPalette, W, H));
+      written.push(`${name}.svg`);
+    }
+  }
 }
 
 // Подручные: только кадры a/b.
@@ -633,6 +1041,14 @@ validateGrid('item-paper', PAPER.grid, PAPER.width, PAPER.height, PAPER.palette)
 if (printMode) printGrid('item-paper', PAPER.grid);
 writeFileSync(join(OUT, 'item-paper.svg'), gridToSvg(PAPER.grid, PAPER.palette, PAPER.width, PAPER.height));
 written.push('item-paper.svg');
+
+// FX-частицы (пыль/вода/монета/сноп).
+for (const [name, fx] of Object.entries(FX)) {
+  validateGrid(name, fx.grid, fx.width, fx.height, fx.palette);
+  if (printMode) printGrid(name, fx.grid);
+  writeFileSync(join(OUT, `${name}.svg`), gridToSvg(fx.grid, fx.palette, fx.width, fx.height));
+  written.push(`${name}.svg`);
+}
 
 console.log(`OK: ${written.length} SVG written to ${OUT}`);
 for (const f of written) console.log('  ' + f);

@@ -1522,6 +1522,34 @@
                                       // when compressed so they never read as teleports
   const EASE_OUT = "cubic-bezier(0.25, 1, 0.5, 1)";
 
+  // ---- chore (work) animation constants ----
+  // Frame swap ≈ 4.5fps (220ms) per the brief, but never faster than the
+  // stride cap (≈6fps); particles spawn every ~700–1000ms, capped at 6 on
+  // screen. zone -> chore -> particle asset map. Every chore is decorative
+  // and lives entirely inside the aria-hidden .farmhouse.
+  const WORK_SWAP_MS = Math.max(220, STRIDE_MS); // 4.5fps, honors the stride cap
+  const FX_SPAWN_MS = 850;          // one particle every ~700–1000ms while working
+  const FX_LIFETIME_MS = 1100;      // rise+fade duration; element removed after
+  const FX_MAX = 6;                 // concurrent particles cap (per the brief)
+  const ASSET_V = "8";              // cache-bust regenerated work/fx SVGs
+  const fxUrl = (p) => p + "?v=" + ASSET_V;
+  const CHORE_BY_ZONE = {
+    kitchen: "dig",     // Поле — КОПАТЬ/САЖАТЬ -> dirt puffs
+    corridor: "haul",   // Амбар — ТАСКАТЬ МЕШКИ -> small dust (reuse dirt)
+    living: "water",    // Теплица — ПОЛИВАТЬ -> water drops
+    bath: "sell",       // Рынок — ТОРГОВАТЬ -> coin sparkles
+  };
+  const FX_ASSET = {
+    dig: fxUrl("assets/fx-dirt.svg"),
+    haul: fxUrl("assets/fx-dirt.svg"),   // штабелирование мешков поднимает ту же пыль
+    water: fxUrl("assets/fx-water.svg"),
+    sell: fxUrl("assets/fx-coin.svg"),
+  };
+
+  function choreFor(zoneId) {
+    return CHORE_BY_ZONE[zoneId] || null;
+  }
+
   const ANCHOR_ALIASES = {
     cabinet: ["cabinet", "office", "boss", "study"],
     kitchen: ["kitchen", "assembly"],
@@ -1723,7 +1751,17 @@
     const b = spriteEl.getAttribute("data-frame-b") || a;
     let sit = spriteEl.getAttribute("data-frame-sit");
     if (!sit && a) sit = a.replace(/-a(\.[a-z]+)$/i, "-sit$1");
-    return { a: a, b: b, sit: sit || a };
+    // Chore (work) frames: explicit data-* override, else the
+    // assets/char-<id>-work1.svg / -work2.svg path convention derived from
+    // frame "a". A missing file just fails to paint (graceful no-op): the
+    // sprite keeps showing its previous frame, the swap interval is harmless.
+    let work1 = spriteEl.getAttribute("data-frame-work1");
+    let work2 = spriteEl.getAttribute("data-frame-work2");
+    // Regenerated chore frames carry a cache-bust query so the new silhouette
+    // poses load even if the old -work*.svg is in the browser cache.
+    if (!work1 && a) work1 = fxUrl(a.replace(/-a(\.[a-z]+)$/i, "-work1$1"));
+    if (!work2 && a) work2 = fxUrl(a.replace(/-a(\.[a-z]+)$/i, "-work2$1"));
+    return { a: a, b: b, sit: sit || a, work1: work1 || a, work2: work2 || (work1 || a) };
   }
 
   function setFrame(actor, key) {
@@ -1776,6 +1814,11 @@
       bobTimer: null,
       walkResolve: null,
       walkTimer: null,
+      working: false,        // chore frame-swap active for this actor
+      workChore: null,       // which chore (dig/haul/water/sell) it is doing
+      workB: false,          // current work frame (false=work1, true=work2)
+      workTimer: null,       // setInterval handle for the frame swap
+      fxTimer: null,         // setInterval handle for the particle emitter
     };
     el.style.left = "0px"; // x is driven by translateX from viewBox units
     if (y != null) el.style.bottom = bottomPct(y) + "%";
@@ -1991,9 +2034,156 @@
   function resumeBobs() {
     for (const id in actors) {
       if (!Object.prototype.hasOwnProperty.call(actors, id)) continue;
-      if (actors[id].bobbing) bobAt(actors[id], true);
+      const actor = actors[id];
+      if (actor.bobbing) bobAt(actor, true);
+      if (actor.working) workAt(actor, true, actor.workChore); // resume frame swap + fx
     }
     startHelperBob(); // no-op unless helpers are visible and motion allowed
+  }
+
+  // ---- chore (work) animation: frame swap + particle emitter ----
+  // workAt: while ON and motion is allowed, swap the sprite between its two
+  // work frames on an interval (≈4.5fps, honoring the stride cap) and run the
+  // particle emitter for the matching chore. While OFF — or whenever motion is
+  // not allowed (reduced-motion / «Анимация» pause / history replay) — both
+  // the swap interval and the emitter are cleared and the sprite freezes on a
+  // single static work pose (work1). The `working`/`workChore` flags survive a
+  // pause so resumeBobs() can restart the loop on toggle-on. Decorative only:
+  // the sprite is inside the aria-hidden .farmhouse and nothing is announced.
+  function workAt(actor, on, chore) {
+    if (!actor || !actor.spriteEl) return;
+    actor.working = Boolean(on);
+    actor.workChore = on ? (chore || actor.workChore) : actor.workChore;
+    stopWork(actor); // clear any existing swap interval + emitter first
+    if (!actor.working) {
+      // Off: drop the chore identity and fall back to the idle/standing frame.
+      actor.workChore = null;
+      if (!actor.sitting && !actor.walking) setFrame(actor, "a");
+      return;
+    }
+    if (!motionAllowed()) {
+      // Motion off but still "working": a single STATIC work pose, no loop.
+      actor.workB = false;
+      setFrame(actor, "work1");
+      return;
+    }
+    actor.sitting = false;
+    actor.workB = false;
+    setFrame(actor, "work1");
+    actor.workTimer = setInterval(function () {
+      if (actor.walking) return; // a stride swap owns the sprite mid-walk
+      actor.workB = !actor.workB;
+      setFrame(actor, actor.workB ? "work2" : "work1");
+    }, WORK_SWAP_MS);
+    startFx(actor, actor.workChore);
+  }
+
+  function stopWork(actor) {
+    if (!actor) return;
+    if (actor.workTimer) { clearInterval(actor.workTimer); actor.workTimer = null; }
+    stopFx(actor);
+  }
+
+  // Count live particles inside the farmhouse so we can cap concurrency.
+  function fxCount() {
+    const farm = farmEl();
+    return farm ? farm.querySelectorAll(".fx").length : 0;
+  }
+
+  // spawnFx: append one decorative particle <img> at the actor's position and
+  // remove it after its rise+fade. NEVER spawns when motion is not allowed,
+  // and respects the FX_MAX concurrency cap. The rise+fade is driven by the
+  // Web Animations API so no stylesheet change is needed and the element is
+  // self-cleaning; one finite play (no looping, no white strobe, subtle).
+  function spawnFx(actor, chore) {
+    if (!actor || !motionAllowed()) return;
+    const farm = farmEl();
+    const src = FX_ASSET[chore];
+    if (!farm || !src || fxCount() >= FX_MAX) return;
+    const px = pxForViewX(actor.viewX, actor.el);
+    if (px == null) return;
+    const img = document.createElement("img");
+    img.className = "fx fx-" + chore;
+    img.src = src;
+    img.alt = "";
+    img.setAttribute("aria-hidden", "true");
+    img.style.position = "absolute";
+    img.style.left = "0px";
+    // emit at roughly hand/chest height, jittered a little around the worker
+    const jitter = (Math.random() * 24 - 12);
+    img.style.bottom = (bottomPct(laneY()) + 7) + "%";
+    // size comes from the .fx CSS rule (kept square); no inline width override
+    // (an inline % width fought the CSS height and squashed coins into bars)
+    img.style.zIndex = "7";
+    img.style.pointerEvents = "none";
+    img.style.transform = "translateX(" + Math.round(px + jitter) + "px)";
+    farm.appendChild(img);
+    let anim = null;
+    try {
+      if (typeof img.animate === "function") {
+        // small lift (≈20px) + soft fade; finite, single play, no strobe
+        anim = img.animate(
+          [
+            { transform: "translate(" + Math.round(px + jitter) + "px, 2px)", opacity: 0.0 },
+            { transform: "translate(" + Math.round(px + jitter) + "px, -6px)", opacity: 0.9, offset: 0.25 },
+            { transform: "translate(" + Math.round(px + jitter) + "px, -20px)", opacity: 0.0 },
+          ],
+          { duration: FX_LIFETIME_MS, easing: "ease-out", fill: "forwards" }
+        );
+      }
+    } catch (err) { anim = null; }
+    function remove() { if (img.parentNode) img.parentNode.removeChild(img); }
+    if (anim && typeof anim.finished !== "undefined") {
+      anim.finished.then(remove).catch(remove);
+    } else {
+      setTimeout(remove, FX_LIFETIME_MS + 40);
+    }
+  }
+
+  // Emit one chore particle now, plus — for the «sell» (Рынок/ТОРГ) chore —
+  // a second coin ~280ms later so the «trade» reads as a little shower of
+  // coins. Still pause/reduced-motion-safe (re-checks at fire time), still
+  // under FX_MAX (spawnFx caps), and at ~280ms apart it stays well under
+  // 3 flashes/sec (each beat is FX_SPAWN_MS≈850ms apart).
+  function emitFx(actor, chore) {
+    spawnFx(actor, chore);
+    if (chore === "sell") {
+      setTimeout(function () {
+        if (actor && actor.working && motionAllowed()) spawnFx(actor, chore);
+      }, 280);
+    }
+  }
+
+  function startFx(actor, chore) {
+    stopFx(actor);
+    if (!actor || !chore || !FX_ASSET[chore] || !motionAllowed()) return;
+    emitFx(actor, chore); // one immediately so the chore reads at once
+    actor.fxTimer = setInterval(function () {
+      if (!actor.working || !motionAllowed()) { stopFx(actor); return; }
+      emitFx(actor, chore);
+    }, FX_SPAWN_MS);
+  }
+
+  function stopFx(actor) {
+    if (actor && actor.fxTimer) { clearInterval(actor.fxTimer); actor.fxTimer = null; }
+  }
+
+  // Freeze every chore on a pause / reduced-motion change: clear all swap
+  // intervals + emitters, drop in-flight particles, and pin still-working
+  // sprites to their single static work pose (work1). Working flags survive
+  // so resumeBobs() can restart the loops on toggle-on.
+  function suspendWork() {
+    for (const id in actors) {
+      if (!Object.prototype.hasOwnProperty.call(actors, id)) continue;
+      const actor = actors[id];
+      stopWork(actor);
+      if (actor.working) { actor.workB = false; setFrame(actor, "work1"); }
+    }
+    const farm = farmEl();
+    if (farm) {
+      const live = farm.querySelectorAll(".fx");
+      for (const el of live) { if (el.parentNode) el.parentNode.removeChild(el); }
+    }
   }
 
   // ---- the shared paper ----
@@ -2333,6 +2523,7 @@
       paintActor(actors[id], 0);
     }
     suspendBobs();
+    suspendWork(); // freeze chore frame-swaps + emitters; drop live particles
     stopHelperBob(); // helpers freeze in place; visibility is unchanged
     if (paperEl && !paperEl.hidden && paperX != null) paintPaperAt(paperX, 0);
   }
@@ -2398,6 +2589,7 @@
       const actor = actors[id];
       if (actor === bossActor) continue;
       bobAt(actor, false);
+      workAt(actor, false); // clear any lingering chore swap + emitter
       if (actor.homeX != null && Math.abs(actor.viewX - actor.homeX) > 0.5) {
         walks.push(
           walkTo(actor, actor.homeX, exitWalkMs(actor.viewX, actor.homeX))
@@ -2502,11 +2694,15 @@
       await walkTo(driver, deskX, inRoomWalkMs(driver.viewX, deskX));
     }
     bobAt(driver, true);
+    workAt(driver, true, choreFor(zoneId)); // chore frame-swap + particles
   }
 
   function choreoDriverDone(zoneId) {
     const crew = zoneCrew(zoneId);
-    if (crew && crew.driver && crew.driver.actor) bobAt(crew.driver.actor, false);
+    if (crew && crew.driver && crew.driver.actor) {
+      bobAt(crew.driver.actor, false);
+      workAt(crew.driver.actor, false); // stop the chore swap + emitter
+    }
     return Promise.resolve();
   }
 
@@ -2521,7 +2717,7 @@
     const testerDeskX = crew.tester
       ? (crew.tester.desk != null ? crew.tester.desk : crew.tester.seat)
       : null;
-    if (driver) bobAt(driver, false);
+    if (driver) { bobAt(driver, false); workAt(driver, false); } // driver stops its chore
     if (driver && testerDeskX != null) {
       // protected beat: the driver visibly carries the paper across the room
       await walkTo(driver, testerDeskX, inRoomWalkMs(driver.viewX, testerDeskX), true);
@@ -2538,6 +2734,7 @@
       await walkTo(tester, testerDeskX, inRoomWalkMs(tester.viewX, testerDeskX), true);
     }
     bobAt(tester, true);
+    workAt(tester, true, choreFor(zoneId)); // tester does the same chore (QA check)
   }
 
   // Shared collect beat (tester.ok and after the bounce bubble): the boss
@@ -2545,7 +2742,7 @@
   async function choreoCollect(zoneId) {
     const crew = zoneCrew(zoneId);
     const tester = crew && crew.tester && crew.tester.actor ? crew.tester.actor : null;
-    if (tester) bobAt(tester, false);
+    if (tester) { bobAt(tester, false); workAt(tester, false); } // stop the QA chore
     if (!bossActor) return;
     const meetX = crew && crew.tester
       ? (crew.tester.desk != null ? crew.tester.desk : crew.tester.seat)
@@ -2573,8 +2770,12 @@
   // collect-by-boss; the following zone.enter walks the boss back.
   async function choreoTesterBounce(zoneId) {
     const crew = zoneCrew(zoneId);
-    if (crew && crew.driver && crew.driver.actor) bobAt(crew.driver.actor, false);
-    if (crew && crew.tester && crew.tester.actor) bobAt(crew.tester.actor, false);
+    if (crew && crew.driver && crew.driver.actor) {
+      bobAt(crew.driver.actor, false); workAt(crew.driver.actor, false);
+    }
+    if (crew && crew.tester && crew.tester.actor) {
+      bobAt(crew.tester.actor, false); workAt(crew.tester.actor, false);
+    }
     showFailBubble(zoneId);
     await wait(BOUNCE_BUBBLE_MS);
     hideFailBubble();
@@ -2659,7 +2860,12 @@
     animEnabled = Boolean(on);
     const btn = document.getElementById("btn-anim");
     if (btn) {
+      // One coherent toggle model: the button is "pressed/engaged" exactly
+      // when animation is ON, which matches the «вкл» glyph and the full
+      // accessible name. (Previously aria-pressed was read as inverted vs the
+      // paused state.) Glyph + aria-pressed + aria-label now all agree.
       btn.setAttribute("aria-pressed", animEnabled ? "true" : "false");
+      btn.setAttribute("aria-label", animEnabled ? "Анимация включена" : "Анимация выключена");
       const indicator = animIndicator(btn);
       if (indicator) indicator.textContent = animEnabled ? "вкл" : "выкл";
     }
