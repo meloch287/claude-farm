@@ -352,6 +352,8 @@ const HEADLESS_AUTH_FAIL = /not logged in|please run \/login|invalid api key|no 
 function cliSpawnEnv() {
   const env = {};
   for (const [k, v] of Object.entries(process.env)) {
+    // Keep the OAuth token: it is how `claude -p` authenticates headless.
+    if (k === 'CLAUDE_CODE_OAUTH_TOKEN') { env[k] = v; continue; }
     if (k === 'CLAUDECODE' || k === 'ANTHROPIC_BASE_URL') continue;
     if (k.startsWith('CLAUDE_CODE_')) continue;
     if (k === 'CLAUDE_AGENT_SDK_VERSION' || k === 'AI_AGENT') continue;

@@ -124,17 +124,23 @@ async function cmdDemo() {
   });
 }
 
-// Optional: load a long-lived token into ANTHROPIC_API_KEY so the real
-// executor can call `claude -p`. Put the token (from `claude setup-token`,
-// starts with sk-ant-) in ~/.claude-farm-token — it never touches the repo
-// or the chat. An ANTHROPIC_API_KEY already in the environment wins.
+// Optional: load a long-lived token so the real executor can call `claude -p`.
+// Put the token in ~/.claude-farm-token — it never touches the repo or chat.
+// A `claude setup-token` value (sk-ant-oat...) is an OAuth token and MUST be
+// passed via CLAUDE_CODE_OAUTH_TOKEN (NOT ANTHROPIC_API_KEY, which rejects it
+// as "Invalid API key"). A plain API key (sk-ant-api...) goes to
+// ANTHROPIC_API_KEY. An existing env value wins.
 async function loadFarmToken() {
-  if (process.env.ANTHROPIC_API_KEY) return 'env';
+  if (process.env.CLAUDE_CODE_OAUTH_TOKEN || process.env.ANTHROPIC_API_KEY) return 'env';
   const tokenPath = path.join(process.env.HOME || '', '.claude-farm-token');
   try {
     const token = (await readFile(tokenPath, 'utf8')).trim();
     if (token) {
-      process.env.ANTHROPIC_API_KEY = token;
+      if (token.startsWith('sk-ant-oat') || token.startsWith('sk-ant-ort')) {
+        process.env.CLAUDE_CODE_OAUTH_TOKEN = token;
+      } else {
+        process.env.ANTHROPIC_API_KEY = token;
+      }
       return tokenPath;
     }
   } catch {
