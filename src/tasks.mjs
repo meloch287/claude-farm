@@ -344,6 +344,23 @@ function detectCli(cmd, { timeoutMs = CLI_PROBE_TIMEOUT_MS, force = false } = {}
 const HEADLESS_AUTH_FAIL = /not logged in|please run \/login|invalid api key|no api key|credit balance|authentication/i;
 
 /**
+ * Clean env for probing the claude CLI: strip the Claude Code harness vars
+ * that force a nested `claude -p` into "credentials injected by parent" mode
+ * (so it falls back to the user's stored token / ANTHROPIC_API_KEY, which is
+ * preserved). Mirrors cliEnv() in agents.mjs.
+ */
+function cliSpawnEnv() {
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (k === 'CLAUDECODE' || k === 'ANTHROPIC_BASE_URL') continue;
+    if (k.startsWith('CLAUDE_CODE_')) continue;
+    if (k === 'CLAUDE_AGENT_SDK_VERSION' || k === 'AI_AGENT') continue;
+    env[k] = v;
+  }
+  return env;
+}
+
+/**
  * Probe whether `claude -p` can actually answer (headless capability), not
  * just whether the binary exists. `claude --version` passes without auth, so
  * a version probe would falsely report the executor as ready and every task
@@ -369,6 +386,7 @@ function detectClaudeHeadless({ timeoutMs = 30_000, force = false } = {}) {
     try {
       child = spawn('claude', ['-p', 'Ответь одним словом: ок'], {
         stdio: ['ignore', 'pipe', 'pipe'],
+        env: cliSpawnEnv(),
       });
     } catch {
       settle(false);

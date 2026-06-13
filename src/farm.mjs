@@ -124,8 +124,29 @@ async function cmdDemo() {
   });
 }
 
+// Optional: load a long-lived token into ANTHROPIC_API_KEY so the real
+// executor can call `claude -p`. Put the token (from `claude setup-token`,
+// starts with sk-ant-) in ~/.claude-farm-token — it never touches the repo
+// or the chat. An ANTHROPIC_API_KEY already in the environment wins.
+async function loadFarmToken() {
+  if (process.env.ANTHROPIC_API_KEY) return 'env';
+  const tokenPath = path.join(process.env.HOME || '', '.claude-farm-token');
+  try {
+    const token = (await readFile(tokenPath, 'utf8')).trim();
+    if (token) {
+      process.env.ANTHROPIC_API_KEY = token;
+      return tokenPath;
+    }
+  } catch {
+    // no token file — farm runs in sim mode, which is fine
+  }
+  return null;
+}
+
 async function cmdServe(args) {
   const config = await loadConfig();
+  const tokenSource = await loadFarmToken();
+  if (tokenSource) console.log(`Токен исполнителя загружен (${tokenSource}).`);
   const portIndex = args.indexOf('--port');
   if (portIndex !== -1) {
     const parsed = Number.parseInt(args[portIndex + 1], 10);

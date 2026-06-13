@@ -324,6 +324,26 @@ function parseVerdict(text) {
   return { ok: false, reason: rest || trimmed || 'Тестер нашёл проблему' };
 }
 
+/**
+ * Build a clean environment for spawning the `claude`/`codex` CLIs.
+ * When the farm server itself is launched from inside a Claude Code session,
+ * it inherits harness variables (CLAUDECODE, CLAUDE_CODE_*, ANTHROPIC_BASE_URL,
+ * CLAUDE_CODE_ENTRYPOINT) that put a nested `claude -p` into a "credentials
+ * injected by parent" mode and make it report "Not logged in". Strip them so
+ * the CLI falls back to the user's own stored long-lived token / API key.
+ */
+function cliEnv() {
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (k === 'CLAUDECODE') continue;
+    if (k.startsWith('CLAUDE_CODE_')) continue;
+    if (k === 'ANTHROPIC_BASE_URL') continue;
+    if (k === 'CLAUDE_AGENT_SDK_VERSION' || k === 'AI_AGENT') continue;
+    env[k] = v;
+  }
+  return env;
+}
+
 /** Spawn an arbitrary CLI prompt call. Resolves {ok, text} | {ok:false, error}. */
 function runCliPrompt(cmd, args, timeoutMs) {
   return new Promise((resolve) => {
@@ -338,7 +358,7 @@ function runCliPrompt(cmd, args, timeoutMs) {
 
     let child;
     try {
-      child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], env: cliEnv() });
     } catch (err) {
       settle({ ok: false, error: String(err?.message ?? err) });
       return;
