@@ -1,160 +1,200 @@
-# Клауд Ферма (claude-farm)
+# Клауд Ферма (Claude Farm)
 
-Игрушечная по форме, но честная по механике ферма задач. Задача проходит через четыре участка фермы, как урожай от грядки до прилавка: на каждом участке её обрабатывает пара агентов — **Driver** (делает работу) и **Tester** (проверяет результат). За ходом дела можно наблюдать в реальном времени на пиксель-арт дашборде: карта фермы и канбан-доска.
+**English** · [Русский](README.ru.md)
 
-Без единой npm-зависимости: только встроенные модули Node.js (v25, ES modules).
+A cozy pixel‑art **task farm** that runs real work through Claude. A task travels across four farm plots — like a harvest from the field to the market stall — and at every plot a pair of agents handles it: a **Driver** does the work and a **Tester** checks the result. You watch it live on a Stardew‑Valley‑inspired dashboard: a farm map where villagers dig, haul, water and sell, and a kanban board of chats.
 
-## Концепция
+Zero npm dependencies — only built‑in Node.js modules.
 
-Ферма — это конвейер. Каждый участок отвечает за свой этап жизненного цикла задачи:
+![Farm map: a pixel‑art farm with a house, field, barn, greenhouse and market stall; farmer villagers stand along a dirt path; a green status bar at the bottom shows a live notification](docs/img/farm.png)
 
-- **Driver** на участке выполняет работу (собирает материалы, выполняет задачу, прогоняет, упаковывает);
-- **Tester** на том же участке придирчиво проверяет результат и выносит вердикт: «ОК» — задача идёт дальше, «БАГ» — задача отправляется назад (bounce);
-- сами агенты по ферме не ходят. **Задачи между участками носит только Главный Агент** — оркестратор (`src/orchestrator.mjs`). Он один знает маршрут, считает попытки, объявляет события и решает, куда нести задачу после вердикта тестера.
+---
 
-Каждый шаг порождает событие (event bus), события пишутся в JSONL-лог, транслируются по SSE на дашборд и озвучиваются в консоли.
+## Contents
 
-## Участки и персонажи
+- [What it is](#what-it-is)
+- [Quick start](#quick-start)
+- [Screenshots](#screenshots)
+- [How it works](#how-it-works)
+- [Real execution (Claude)](#real-execution-claude)
+- [Ultracode subagents](#ultracode-subagents)
+- [Boards (chats)](#boards-chats)
+- [Settings](#settings)
+- [HTTP API](#http-api)
+- [Main Agent mode](#main-agent-mode)
+- [Project layout](#project-layout)
+- [Accessibility](#accessibility)
+- [Tests & CI](#tests--ci)
 
-| Порядок | Зона | Название | Driver | Tester | Что происходит |
-|---|---|---|---|---|---|
-| 1 | `kitchen` | Поле — Сбор | The Scraper | The Cleaner | Сбор материалов и плана для задачи |
-| 2 | `corridor` | Амбар — Обработка | The Editor | The Validator | Настоящее выполнение задачи, проверка по существу |
-| 3 | `living` | Теплица — QA | The Runner | The Sniffer | Прогон «глазами пользователя»; в ультракоде — параллельные субагенты |
-| 4 | `bath` | Рынок — Релиз | The Archiver | The Sign-Off | Запись result.md и manifest.json, финальная приёмка |
+---
 
-Когда Sign-Off доволен, в логе появляется: «Клиенту можно отправлять!»
+## What it is
 
-## Два движка: Клауд и Кодекс
+Клауд Ферма is a task pipeline with a playful skin. Each plot owns one stage of a task's life:
 
-Ферма умеет выполнять задачи двумя реальными движками — выбор движка хранится в глобальных настройках (шестерёнка «Настройки» на дашборде) и может быть переопределён на каждую задачу:
+| # | Zone id | Plot | Driver | Tester | What happens |
+|---|---------|------|--------|--------|--------------|
+| 1 | `kitchen`  | Поле — Сбор (Field — Intake) | The Scraper | The Cleaner | Gather materials and a plan for the task |
+| 2 | `corridor` | Амбар — Обработка (Barn — Processing) | The Editor | The Validator | **Actually perform the task**, validate on the merits |
+| 3 | `living`   | Теплица — QA (Greenhouse — QA) | The Runner | The Sniffer | Read the result as a user would; in ultracode, parallel subagents review it |
+| 4 | `bath`     | Рынок — Релиз (Market — Release) | The Archiver | The Sign‑Off | Write `result.md` + `manifest.json`, final acceptance |
 
-- **Клауд** — локальный `claude` CLI (`claude -p ... --model <модель>`). Модель задач выбирается из каталога (`Клауд 4.8`, `Соннет 4.6`, `Хайку 4.5`), режим — **Ультракод** или Обычный.
-- **Кодекс** — локальный `codex` CLI (`codex exec --model <модель> -c model_reasoning_effort=<low|medium> ...`). Скорость «Фастер» снижает усилие рассуждения (low), «Обычная» — medium. Субагентов в кодекс-пути нет.
+The agents never walk around the farm themselves. **Only the Main Agent — the orchestrator (`src/orchestrator.mjs`) — carries a task between plots.** It knows the route, counts attempts, emits events, and decides where a task goes after a tester's verdict. A Tester returns `ОК` (move on) or `БАГ` (bounce back). After too many bounces (`maxAttempts`, default 3) the task fails.
 
-Оба CLI детектируются один раз при старте сервера (`claude --version` / `codex --version`); флаги доступности отдаются в `/api/state` как `claudeExecutor` и `codexExecutor`. Если выбранный CLI недоступен, задача честно выполняется симуляцией с заметкой «claude CLI недоступен — выполнено симуляцией» (или «codex CLI недоступен — ...»).
+The engine is **Claude only** — real `claude -p` when a token is available, otherwise an honest simulation fallback.
 
-## Ультракод: субагенты в Теплице
-
-В режиме **Ультракод** (движок Клауд) перед вердиктом Sniffer'а в Теплице запускаются **параллельные субагенты** — до 8 штук на своей (обычно более дешёвой) модели. Каждый субагент получает свой тип проверки, типы циклически распределяются по количеству:
-
-| Тип | Инструкция |
-|---|---|
-| `review` (Ревью) | сделай ревью результата |
-| `bugs` (Поиск ошибок) | найди ошибки/несостыковки |
-| `optimize` (Оптимизация) | предложи улучшения |
-| `factcheck` (Факт-чекинг) | проверь факты |
-
-Находки субагентов сливаются в дайджест и попадают к Sniffer'у: если среди находок есть реальные проблемы — вердикт «БАГ» с причинами, и задача уходит назад в Амбар. На дашборде в этот момент видно сообщение вида «результат проверили 3 субагентов (ревью, поиск ошибок)».
-
-## Настройки
-
-Глобальные настройки хранятся в `output/settings.json` и доступны через API:
+## Quick start
 
 ```bash
-curl -s localhost:8787/api/settings
-curl -s -X PUT localhost:8787/api/settings -d '{"engine":"codex","codex":{"speed":"faster"}}'
+npm run serve          # start the dashboard, opens Safari on macOS
+# then open http://localhost:8787
+
+npm test               # run the test suite (zero deps, Node's built‑in runner)
+
+node src/farm.mjs run "Guest list" --input path/to/file.txt   # run one task from a file
 ```
 
-Форма настроек (значения по умолчанию):
+Create tasks from the **Board** tab: type a title and data, press **Создать задачу** (Create task) or **Создать задачу ИИ** (Create AI task — Claude decomposes it into many subtasks). Switch to the **Ферма** (Farm) tab to watch the villagers do the work; the finished deliverable lands in `output/<taskId>/result.md`.
+
+## Screenshots
+
+| Kanban board | Mobile (responsive) |
+|---|---|
+| ![Kanban board titled “Доска задач — Чат 1” with a board switcher, a task‑creation form, and six columns (Queue, Intake, Processing, QA, Release, Done) holding task cards with model and mode badges](docs/img/board.png) | ![The same dashboard on a narrow phone screen: the header and controls stack into full‑width buttons and the board bar wraps, with no horizontal scrolling](docs/img/mobile.png) |
+
+## How it works
+
+Every step emits an event on an internal bus. Events are streamed to the dashboard over **Server‑Sent Events** (`GET /events`) and narrated in the console. The dashboard turns them into motion: the boss villager carries a paper between plots, the active worker plays a chore animation (digging in the field, hauling sacks in the barn, watering in the greenhouse, selling at the market), and the kanban cards move between columns. A coalesced status line at the bottom of the screen announces what just happened.
+
+### The bounce‑back, by example: `35.12.2023`
+
+The CLI demo (`npm run demo`, deterministic sim) feeds 20 lines of `Name;DD.MM.YYYY`, with line 13 broken on purpose: `Игорь;35.12.2023`.
+
+1. **Field.** The Scraper splits the file into lines; The Cleaner confirms there is work to do.
+2. **Barn.** The Editor builds a CSV. The Validator checks every date as a real calendar date and trips on `35.12.2023`. It files a fix (clamp the day to the last valid day: `35` → `31`) and votes `БАГ`, bounce to `kitchen`.
+3. **Bounce.** The Main Agent bumps the attempt counter and carries the task back to the field; the Scraper re‑builds the data with the fix applied.
+4. **Second pass.** Barn validates, Greenhouse finds no duplicates or empty fields, Market writes the files: “Клиенту можно отправлять!” (Ready to ship).
+
+## Real execution (Claude)
+
+For non‑demo tasks the farm runs the real `claude` CLI (`claude -p ... --model <model>`). The Editor in the Barn **really performs the task** and writes a markdown deliverable; the testers judge it on the merits.
+
+Headless `claude -p` needs its own credentials (an OAuth token or an API key — your interactive login does **not** carry over). Enable it once:
+
+```bash
+claude setup-token          # in a real terminal; prints an sk-ant-oat… token
+echo 'PASTE_TOKEN_HERE' > ~/.claude-farm-token
+chmod 600 ~/.claude-farm-token
+```
+
+On start the server loads that file: a `sk-ant-oat…` token goes to `CLAUDE_CODE_OAUTH_TOKEN`, a plain API key to `ANTHROPIC_API_KEY`. It then probes `claude -p` once and reports readiness in `GET /api/state` as `claudeExecutor: true`. The token file lives in your home directory and is never committed. Without it, tasks still complete — via a clearly‑noted simulation fallback.
+
+## Ultracode subagents
+
+In **Ultracode** mode, before the Sniffer's verdict in the Greenhouse, the farm spawns up to 8 **parallel subagents** on a (usually cheaper) model. Each gets one review type, cycled across the count:
+
+| Type | Instruction |
+|------|-------------|
+| `review` | review the result |
+| `bugs` | find errors and inconsistencies |
+| `optimize` | suggest improvements |
+| `factcheck` | verify the facts |
+
+Their findings are merged into a digest the Sniffer reads — real problems become a `БАГ` and send the task back to the Barn. On the map, extra farmhands appear in the greenhouse while they work.
+
+## Boards (chats)
+
+The kanban is split into independent **boards**, each a separate chat/workspace with its own task list:
+
+- **Доска:** a `<select>` switches the active board.
+- **+ Новая доска** creates a new chat; **Переименовать** / **Удалить** rename and delete (there is always at least one board).
+- A task is created into the currently selected board and is isolated from the others. The shared farm map always shows whichever task is currently running (the queue is a single global FIFO).
+
+## Settings
+
+Global settings live in `output/settings.json` and are reachable via the gear dialog or the API. The shape is flat (Claude‑only):
 
 ```json
 {
-  "engine": "claude",
-  "claude": {
-    "model": "claude-opus-4-8",
-    "mode": "ultracode",
-    "subagents": { "model": "claude-sonnet-4-6", "count": 3, "types": ["review", "bugs"] }
-  },
-  "codex": { "model": "gpt-5.5", "speed": "normal" }
+  "model": "claude-opus-4-8",
+  "mode": "ultracode",
+  "subagents": { "model": "claude-sonnet-4-6", "count": 3, "types": ["review", "bugs"] }
 }
 ```
 
-PUT принимает частичный патч и строго валидирует перечисления (мусор — 400 с русскими ошибками). Каталог моделей лежит в `farm.config.json` (`claudeModels` / `codexModels`) и отдаётся в `/api/state`.
+```bash
+curl -s localhost:8787/api/settings
+curl -s -X PUT localhost:8787/api/settings -d '{"model":"claude-sonnet-4-6","mode":"normal"}'
+```
 
-### Конфиг на задачу
+`PUT` takes a partial patch and strictly validates enums. The model catalog lives in `farm.config.json` (`claudeModels`).
 
-`POST /api/task` принимает необязательный `config` — он накладывается поверх глобальных настроек и сохраняется на задаче (виден в `GET /api/tasks`, на карточке канбана — бейджи модели и режима/скорости):
+### Per‑task config
+
+`POST /api/task` accepts an optional `config` that is merged over the global settings and stored on the task (shown as model/mode badges on the kanban card):
 
 ```bash
 curl -s -X POST localhost:8787/api/task \
-  -d '{"title":"Отчёт","input":"...","config":{"engine":"codex","speed":"faster"}}'
+  -d '{"title":"Report","input":"...","boardId":"b1","config":{"model":"claude-haiku-4-5-20251001","mode":"normal","subagents":{"count":0,"types":[]}}}'
 ```
 
-Подзадачи ИИ-разбиения наследуют конфиг родителя.
+## HTTP API
 
-## Архитектура файлов
+| Method & path | Purpose |
+|---|---|
+| `GET /events` | SSE stream of pipeline events |
+| `GET /api/state` | zones, `claudeExecutor`, last 100 events |
+| `GET /api/tasks?board=<id>` | tasks for a board (default: active board) |
+| `POST /api/task` | create a task `{title, input, mode, boardId, config}` → `202 {taskId}` |
+| `GET /api/boards` | `{boards, activeBoardId}` |
+| `POST /api/boards` | create a board `{name?}` |
+| `PATCH /api/boards/:id` | rename `{name}` |
+| `DELETE /api/boards/:id` | delete a board and its tasks |
+| `GET / PUT /api/settings` | read / patch global settings |
+| `POST /api/event` | inject an external event (Main Agent mode) |
 
-```
-claude-farm/
-├── farm.config.json      # порт, maxAttempts, executor, каталог моделей, описание зон
-├── package.json          # scripts: demo, serve, start, test
-├── src/
-│   ├── farm.mjs          # CLI: demo | serve [--port N] | run "<title>" --input <file> [--real]
-│   ├── orchestrator.mjs  # Главный Агент: маршрут по участкам, баунсы, лимит попыток
-│   ├── events.mjs        # шина событий: seq+ts, история (500), JSONL-лог, подписки
-│   ├── agents.mjs        # sim-агенты, claude-агенты, codex-агенты, ультракод-субагенты
-│   ├── tasks.mjs         # стор задач, FIFO-очередь, настройки, выбор движка
-│   └── server.mjs        # http: статика, SSE /events, /api/state, /api/tasks, /api/task, /api/settings, /api/event
-├── dashboard/
-│   ├── index.html        # карта фермы + канбан-доска
-│   ├── style.css         # пиксель-арт, состояния участков
-│   └── app.js            # EventSource, рендер состояний, формы и настройки
-├── demo/
-│   └── demo-task.txt     # демо-данные: 20 строк «Имя;ДД.ММ.ГГГГ» с одной битой датой
-├── test/                 # node --test (CLI в тестах никогда не запускается)
-└── output/               # результаты задач, tasks-state.json, settings.json
-```
+## Main Agent mode
 
-## Режим Главного Агента (Claude)
-
-Ферма умеет работать не только на встроенных агентах: внешний оркестратор — например, Claude Code в роли Главного Агента — выполняет работу участков своими субагентами и транслирует каждый шаг на дашборд через `POST /api/event`:
+The farm can be driven by an external orchestrator — for example Claude Code acting as the Main Agent — doing the real work with its own subagents and broadcasting each step to the dashboard via `POST /api/event`:
 
 ```bash
 curl -s -X POST localhost:8787/api/event \
   -d '{"type":"zone.enter","taskId":"boss-1","zone":"kitchen","message":"Задача переходит в зону «Поле — Сбор»"}'
 ```
 
-Допустимые `type`: `task.created`, `zone.enter`, `driver.start`, `driver.done`, `tester.start`, `tester.ok`, `tester.bounce`, `task.done`, `task.failed`. Дашборд отображает внешние события точно так же, как события встроенной фермы.
+Allowed `type` values: `task.created`, `task.queued`, `zone.enter`, `driver.start`, `driver.done`, `tester.start`, `tester.ok`, `tester.bounce`, `task.done`, `task.failed`. External events render exactly like the built‑in farm's.
 
-## Быстрый старт
+## Project layout
+
+```
+claude-farm/
+├── farm.config.json      # port, maxAttempts, executor, model catalog, zones
+├── package.json          # scripts: demo, serve, start, test
+├── src/
+│   ├── farm.mjs          # CLI: demo | serve [--port N] [--no-open] | run "<title>" --input <file>
+│   ├── orchestrator.mjs  # Main Agent: route across plots, bounces, attempt limit
+│   ├── events.mjs        # event bus: seq+ts, history, JSONL log, subscriptions
+│   ├── agents.mjs        # sim runners, claude runners, ultracode subagents
+│   ├── tasks.mjs         # task store, FIFO queue, boards, settings
+│   └── server.mjs        # http: static, SSE, /api/state|tasks|task|boards|settings|event
+├── dashboard/
+│   ├── index.html        # farm map + kanban board (two views)
+│   ├── style.css         # pixel art, 90% density, responsive, plot states
+│   ├── app.js            # EventSource, board rendering, choreography, forms
+│   └── assets/           # original pixel sprites + the farm scene (SVG)
+├── demo/demo-task.txt    # demo data: 20 lines, one broken date
+├── test/                 # node --test (no real CLI is ever spawned)
+└── output/               # task results, farm-state.json, settings.json
+```
+
+## Accessibility
+
+The dashboard targets WCAG AA. Plot states are conveyed by text and a glyph (never color alone); status announcements coalesce through a single `role="status"` region (the visible bottom bar); progress is marked with `aria-current="step"`; the farm map is decorative (`aria-hidden`); all animations honor `prefers‑reduced‑motion` and the **Анимация** pause toggle; sound is off by default behind an `aria-pressed` button; the layout reflows cleanly down to ~320px and at 200% zoom, with ≥44px touch targets.
+
+## Tests & CI
 
 ```bash
-# Прогнать демо-задачу в консоли (с повествованием на русском)
-npm run demo
-
-# Поднять дашборд и смотреть на ферму вживую
-npm run serve
-# затем открыть http://localhost:8787
-
-# Своя задача из файла
-node src/farm.mjs run "Список гостей" --input path/to/file.txt
-
-# Тесты
 npm test
 ```
 
-## Как работает баунс-бэк: дата 35.12.2023
-
-В `demo/demo-task.txt` строка 13 испорчена нарочно: `Игорь;35.12.2023`. Декабрь заканчивается 31-м числом, так что дальше происходит вот что:
-
-1. **Поле.** The Scraper разбирает файл на строки, The Cleaner подтверждает: строки есть, можно работать.
-2. **Амбар.** The Editor собирает CSV. The Validator проверяет каждую дату как реальную календарную и спотыкается о `35.12.2023`. Он формирует заявку на исправление (день обрезается до последнего дня месяца: `35` → `31`) и выносит вердикт: `{ok: false, reason: «Дата 35.12.2023 не существует», bounceTo: "kitchen"}`.
-3. **Баунс.** Главный Агент увеличивает счётчик попыток и несёт задачу обратно на поле. The Scraper пересобирает данные уже с исправлением — в логе появляется «Паша исправил дату».
-4. **Второй заход.** Амбар: Validator доволен. Теплица: The Runner открывает CSV как пользователь, The Sniffer не находит ни дублей, ни пустых полей. Рынок: The Archiver пишет `output/<taskId>/result.csv` и `manifest.json`, The Sign-Off проверяет, что оба файла на месте и не пустые: «Клиенту можно отправлять!»
-
-Если тестеры заворачивают задачу слишком упорно и число попыток превышает `maxAttempts` (по умолчанию 3 в `farm.config.json`), Главный Агент объявляет `task.failed`, и задача снимается с конвейера.
-
-## Real-режим из CLI
-
-Вместо детерминированных sim-агентов на участках могут работать настоящие модели — через локально установленный `claude` CLI:
-
-```bash
-node src/farm.mjs run "Список гостей" --input demo/demo-task.txt --real
-```
-
-Каждый агент получает промпт со своей ролью, задачей участка и сводкой накопленных данных. Тестеры обязаны начинать ответ со слова **ОК** или **БАГ**. Ответы моделей недетерминированы, тесты этот режим не используют.
-
-## Доступность
-
-Дашборд собран по чек-листу WCAG AA, чек-лист внедрён: семантическая разметка и состояния участков дублируются текстом и глифом (не только цветом), лента событий — live-регион (`role="log"`), статусные объявления коалесцируются (`role="status"`, не чаще раза в 2 секунды), прогресс отмечен `aria-current="step"`, анимации уважают `prefers-reduced-motion`, мигание при ошибке ограничено тремя вспышками в секунду, звук по умолчанию выключен и управляется кнопкой с `aria-pressed`.
+The suite runs on Node's built‑in test runner with zero dependencies and never spawns a real CLI. GitHub Actions runs it on every push (`.github/workflows/ci.yml`).
