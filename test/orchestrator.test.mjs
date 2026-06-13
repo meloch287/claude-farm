@@ -10,10 +10,10 @@ import { createSimRunners } from "../src/agents.mjs";
 import { createEventBus } from "../src/events.mjs";
 
 const ZONES = [
-  { id: "kitchen", title: "Кухня — Сборка", driver: { id: "scraper", name: "The Scraper" }, tester: { id: "cleaner", name: "The Cleaner" } },
-  { id: "corridor", title: "Коридор — Обработка", driver: { id: "editor", name: "The Editor" }, tester: { id: "validator", name: "The Validator" } },
-  { id: "living", title: "Гостиная — QA", driver: { id: "runner", name: "The Runner" }, tester: { id: "sniffer", name: "The Sniffer" } },
-  { id: "bath", title: "Ванная — Релиз", driver: { id: "archiver", name: "The Archiver" }, tester: { id: "signoff", name: "The Sign-Off" } },
+  { id: "kitchen", title: "Поле — Сбор", driver: { id: "scraper", name: "The Scraper" }, tester: { id: "cleaner", name: "The Cleaner" } },
+  { id: "corridor", title: "Амбар — Обработка", driver: { id: "editor", name: "The Editor" }, tester: { id: "validator", name: "The Validator" } },
+  { id: "living", title: "Теплица — QA", driver: { id: "runner", name: "The Runner" }, tester: { id: "sniffer", name: "The Sniffer" } },
+  { id: "bath", title: "Рынок — Релиз", driver: { id: "archiver", name: "The Archiver" }, tester: { id: "signoff", name: "The Sign-Off" } },
 ];
 
 function makeConfig(overrides = {}) {

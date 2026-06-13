@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" shape-rendering="crispEdges" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
   <defs>
-    <!-- черепица -->
+    <!-- черепица крыши фермерского дома -->
     <pattern id="fm-shingles" width="48" height="32" patternUnits="userSpaceOnUse">
       <rect width="48" height="32" fill="#c96f4a"/>
       <rect y="12" width="48" height="4" fill="#a8431f"/>
@@ -11,50 +11,444 @@
       <rect x="10" y="16" width="2" height="12" fill="#a8431f"/>
       <rect x="34" y="16" width="2" height="12" fill="#a8431f"/>
     </pattern>
-    <!-- дощатый пол (полоса-«лента» для прогулки Босса) -->
-    <pattern id="fm-planks" width="96" height="20" patternUnits="userSpaceOnUse">
-      <rect width="96" height="10" fill="#c98e4f"/>
-      <rect y="10" width="96" height="10" fill="#b97c3f"/>
-      <rect y="9" width="96" height="1" fill="#8a5a2b"/>
-      <rect y="19" width="96" height="1" fill="#8a5a2b"/>
-      <rect x="60" width="1" height="9" fill="#8a5a2b"/>
-      <rect x="20" y="10" width="1" height="9" fill="#8a5a2b"/>
-    </pattern>
     <!-- трава: дизеринг двух зелёных -->
     <pattern id="fm-grass" width="8" height="8" patternUnits="userSpaceOnUse">
       <rect width="8" height="8" fill="#79a943"/>
       <rect width="4" height="4" fill="#6c9a3a"/>
       <rect x="4" y="4" width="4" height="4" fill="#6c9a3a"/>
     </pattern>
-    <!-- обои комнат -->
-    <pattern id="fm-wp-cabinet" width="16" height="16" patternUnits="userSpaceOnUse">
-      <rect width="16" height="16" fill="#ecdcb4"/>
-      <rect width="4" height="16" fill="#e0cb98"/>
-    </pattern>
-    <pattern id="fm-wp-kitchen" width="16" height="16" patternUnits="userSpaceOnUse">
-      <rect width="16" height="16" fill="#e3ecca"/>
-      <rect x="4" y="4" width="4" height="4" fill="#ccdba8"/>
-      <rect x="12" y="12" width="4" height="4" fill="#ccdba8"/>
-    </pattern>
-    <pattern id="fm-wp-corridor" width="16" height="16" patternUnits="userSpaceOnUse">
-      <rect width="16" height="16" fill="#eed8c0"/>
-      <rect x="8" width="4" height="16" fill="#e0c2a4"/>
-    </pattern>
-    <pattern id="fm-wp-living" width="16" height="16" patternUnits="userSpaceOnUse">
-      <rect width="16" height="16" fill="#d6e3ec"/>
-      <rect x="4" y="6" width="4" height="4" fill="#bcd0de"/>
-      <rect x="12" y="14" width="4" height="2" fill="#bcd0de"/>
-      <rect x="12" width="4" height="2" fill="#bcd0de"/>
-    </pattern>
-    <pattern id="fm-wp-bath" width="20" height="20" patternUnits="userSpaceOnUse">
-      <rect width="20" height="20" fill="#d4eae6"/>
-      <rect y="18" width="20" height="2" fill="#b6d6d0"/>
-      <rect x="18" width="2" height="20" fill="#b6d6d0"/>
+    <!-- утоптанная земляная дорожка -->
+    <pattern id="fm-dirt" width="32" height="16" patternUnits="userSpaceOnUse">
+      <rect width="32" height="16" fill="#c9a06a"/>
+      <rect x="4" y="4" width="4" height="4" fill="#b98a52"/>
+      <rect x="20" y="12" width="4" height="4" fill="#b98a52"/>
+      <rect x="12" y="8" width="4" height="4" fill="#d4b27e"/>
+      <rect x="28" width="4" height="4" fill="#b98a52"/>
     </pattern>
   </defs>
 
-  <!-- ======== ТРАВЯНАЯ ПОЛОСА (y 440-540) ======== -->
+  <!-- ======== НЕБО (y 0-80) ======== -->
+  <rect x="0" y="0" width="960" height="32" fill="#7db8e0"/>
+  <rect x="0" y="32" width="960" height="28" fill="#93c7e6"/>
+  <rect x="0" y="60" width="960" height="20" fill="#aedcf0"/>
+  <!-- пиксельное солнце -->
+  <g>
+    <rect x="76" y="4" width="8" height="8" fill="#f6d56a"/>
+    <rect x="76" y="68" width="8" height="8" fill="#f6d56a"/>
+    <rect x="40" y="36" width="8" height="8" fill="#f6d56a"/>
+    <rect x="112" y="36" width="8" height="8" fill="#f6d56a"/>
+    <rect x="56" y="28" width="48" height="24" fill="#f6d56a"/>
+    <rect x="60" y="24" width="40" height="32" fill="#f6d56a"/>
+    <rect x="64" y="20" width="32" height="40" fill="#f6d56a"/>
+    <rect x="68" y="16" width="24" height="48" fill="#f6d56a"/>
+    <rect x="84" y="52" width="16" height="8" fill="#e3a93a"/>
+    <rect x="92" y="40" width="8" height="12" fill="#e3a93a"/>
+  </g>
+  <!-- облака -->
+  <g>
+    <rect x="240" y="28" width="72" height="16" fill="#fbf6e8"/>
+    <rect x="256" y="20" width="40" height="8" fill="#fbf6e8"/>
+    <rect x="240" y="40" width="72" height="4" fill="#dcebf2"/>
+    <rect x="516" y="44" width="60" height="12" fill="#fbf6e8"/>
+    <rect x="528" y="36" width="32" height="8" fill="#fbf6e8"/>
+    <rect x="516" y="52" width="60" height="4" fill="#dcebf2"/>
+    <rect x="792" y="20" width="64" height="16" fill="#fbf6e8"/>
+    <rect x="808" y="12" width="32" height="8" fill="#fbf6e8"/>
+    <rect x="792" y="32" width="64" height="4" fill="#dcebf2"/>
+  </g>
+
+  <!-- ======== ДАЛЬНИЕ ХОЛМЫ (y 72-96) ======== -->
+  <rect x="120" y="72" width="64" height="8" fill="#8db657"/>
+  <rect x="420" y="72" width="80" height="8" fill="#8db657"/>
+  <rect x="700" y="72" width="72" height="8" fill="#8db657"/>
+  <rect x="0" y="80" width="960" height="16" fill="#8db657"/>
+  <rect x="60" y="84" width="40" height="4" fill="#9fc46a"/>
+  <rect x="300" y="84" width="56" height="4" fill="#9fc46a"/>
+  <rect x="620" y="84" width="48" height="4" fill="#9fc46a"/>
+  <rect x="860" y="84" width="40" height="4" fill="#9fc46a"/>
+
+  <!-- ======== ЛУГ (y 96-440) ======== -->
+  <rect x="0" y="96" width="960" height="344" fill="url(#fm-grass)"/>
+
+  <!-- ======== ЗЕМЛЯНАЯ ДОРОЖКА (y 400-440) ======== -->
+  <rect x="0" y="400" width="960" height="40" fill="url(#fm-dirt)"/>
+  <rect x="0" y="400" width="960" height="4" fill="#a07a44"/>
+  <rect x="0" y="436" width="960" height="4" fill="#a07a44"/>
+
+  <!-- ======== ЯБЛОНИ В ПРОСВЕТАХ ======== -->
+  <g>
+    <rect x="340" y="320" width="12" height="80" fill="#8a5a2b"/>
+    <rect x="328" y="248" width="40" height="12" fill="#5f8f3a"/>
+    <rect x="316" y="260" width="64" height="52" fill="#5f8f3a"/>
+    <rect x="324" y="268" width="20" height="12" fill="#79a943"/>
+    <rect x="352" y="284" width="16" height="12" fill="#79a943"/>
+    <rect x="332" y="288" width="4" height="4" fill="#b8442e"/>
+    <rect x="356" y="268" width="4" height="4" fill="#b8442e"/>
+    <rect x="344" y="300" width="4" height="4" fill="#b8442e"/>
+  </g>
+  <g>
+    <rect x="740" y="328" width="12" height="72" fill="#8a5a2b"/>
+    <rect x="728" y="256" width="40" height="12" fill="#5f8f3a"/>
+    <rect x="716" y="268" width="64" height="52" fill="#5f8f3a"/>
+    <rect x="724" y="276" width="20" height="12" fill="#79a943"/>
+    <rect x="752" y="292" width="16" height="12" fill="#79a943"/>
+    <rect x="732" y="296" width="4" height="4" fill="#b8442e"/>
+    <rect x="756" y="276" width="4" height="4" fill="#b8442e"/>
+  </g>
+
+  <!-- ===== ФЕРМЕРСКИЙ ДОМ (x 0-140) ===== -->
+  <g>
+    <!-- крыша ступенями -->
+    <rect x="48" y="144" width="48" height="16" fill="url(#fm-shingles)"/>
+    <rect x="32" y="160" width="80" height="16" fill="url(#fm-shingles)"/>
+    <rect x="16" y="176" width="112" height="16" fill="url(#fm-shingles)"/>
+    <rect x="4" y="192" width="136" height="16" fill="url(#fm-shingles)"/>
+    <rect x="52" y="140" width="40" height="4" fill="#54331a"/>
+    <rect x="4" y="204" width="136" height="4" fill="#8a5a2b"/>
+    <!-- кирпичная труба с дымом -->
+    <g id="chimney-smoke">
+      <rect x="92" y="128" width="8" height="8" fill="#d6cbbf"/>
+      <rect x="104" y="116" width="8" height="8" fill="#c5b8aa"/>
+    </g>
+    <rect x="88" y="148" width="24" height="8" fill="#6e6259"/>
+    <rect x="92" y="156" width="16" height="48" fill="#9a5a44"/>
+    <rect x="92" y="172" width="16" height="4" fill="#7a4434"/>
+    <rect x="92" y="188" width="16" height="4" fill="#7a4434"/>
+    <!-- стены с балками -->
+    <rect x="12" y="208" width="120" height="192" fill="#ecdcb4"/>
+    <rect x="12" y="208" width="120" height="8" fill="#8a5a2b"/>
+    <rect x="12" y="208" width="8" height="192" fill="#8a5a2b"/>
+    <rect x="124" y="208" width="8" height="192" fill="#8a5a2b"/>
+    <rect x="12" y="304" width="120" height="4" fill="#e0cb98"/>
+    <!-- окно слева -->
+    <rect x="24" y="240" width="28" height="32" fill="#8a5a2b"/>
+    <rect x="28" y="244" width="20" height="24" fill="#aacfe8"/>
+    <rect x="36" y="244" width="4" height="24" fill="#8a5a2b"/>
+    <rect x="28" y="252" width="20" height="4" fill="#8a5a2b"/>
+    <rect x="20" y="272" width="36" height="8" fill="#6b4226"/>
+    <!-- окно справа -->
+    <rect x="92" y="240" width="28" height="32" fill="#8a5a2b"/>
+    <rect x="96" y="244" width="20" height="24" fill="#aacfe8"/>
+    <rect x="104" y="244" width="4" height="24" fill="#8a5a2b"/>
+    <rect x="96" y="252" width="20" height="4" fill="#8a5a2b"/>
+    <rect x="88" y="272" width="36" height="8" fill="#6b4226"/>
+    <!-- крыльцо: козырёк над дверью -->
+    <rect x="48" y="312" width="48" height="8" fill="#8a5a2b"/>
+    <rect x="48" y="320" width="4" height="16" fill="#9c6b33"/>
+    <rect x="92" y="320" width="4" height="16" fill="#9c6b33"/>
+    <!-- дверь -->
+    <rect x="56" y="320" width="40" height="8" fill="#8a5a2b"/>
+    <rect x="60" y="328" width="32" height="72" fill="#6b4226"/>
+    <rect x="64" y="336" width="24" height="56" fill="#8a5a2b"/>
+    <rect x="84" y="360" width="4" height="8" fill="#e3a93a"/>
+    <!-- приступок -->
+    <rect x="48" y="392" width="56" height="8" fill="#c98e4f"/>
+  </g>
+
+  <!-- ===== ПОЛЕ — СБОР (x 150-340) ===== -->
+  <g>
+    <!-- вспаханный участок с бороздами -->
+    <rect x="152" y="272" width="184" height="128" fill="#8a5a2b"/>
+    <rect x="152" y="272" width="184" height="4" fill="#6b4226"/>
+    <rect x="152" y="272" width="4" height="128" fill="#6b4226"/>
+    <rect x="332" y="272" width="4" height="128" fill="#6b4226"/>
+    <rect x="156" y="292" width="176" height="8" fill="#6b4226"/>
+    <rect x="156" y="316" width="176" height="8" fill="#6b4226"/>
+    <rect x="156" y="340" width="176" height="8" fill="#6b4226"/>
+    <rect x="156" y="364" width="176" height="8" fill="#6b4226"/>
+    <rect x="156" y="388" width="176" height="8" fill="#6b4226"/>
+    <!-- ростки: ряд 1 -->
+    <rect x="168" y="276" width="4" height="12" fill="#4f8f2c"/><rect x="164" y="276" width="4" height="4" fill="#79a943"/><rect x="172" y="280" width="4" height="4" fill="#79a943"/>
+    <rect x="200" y="276" width="4" height="12" fill="#4f8f2c"/><rect x="196" y="276" width="4" height="4" fill="#79a943"/><rect x="204" y="280" width="4" height="4" fill="#79a943"/>
+    <rect x="296" y="276" width="4" height="12" fill="#4f8f2c"/><rect x="292" y="276" width="4" height="4" fill="#79a943"/><rect x="300" y="280" width="4" height="4" fill="#79a943"/>
+    <rect x="328" y="276" width="4" height="12" fill="#4f8f2c"/><rect x="324" y="276" width="4" height="4" fill="#79a943"/>
+    <!-- ростки: ряд 2 -->
+    <rect x="184" y="300" width="4" height="12" fill="#4f8f2c"/><rect x="180" y="300" width="4" height="4" fill="#79a943"/><rect x="188" y="304" width="4" height="4" fill="#79a943"/>
+    <rect x="216" y="300" width="4" height="12" fill="#4f8f2c"/><rect x="212" y="300" width="4" height="4" fill="#79a943"/><rect x="220" y="304" width="4" height="4" fill="#79a943"/>
+    <rect x="280" y="300" width="4" height="12" fill="#4f8f2c"/><rect x="276" y="300" width="4" height="4" fill="#79a943"/><rect x="284" y="304" width="4" height="4" fill="#79a943"/>
+    <rect x="312" y="300" width="4" height="12" fill="#4f8f2c"/><rect x="308" y="300" width="4" height="4" fill="#79a943"/><rect x="316" y="304" width="4" height="4" fill="#79a943"/>
+    <!-- ростки: ряд 3 -->
+    <rect x="168" y="324" width="4" height="12" fill="#4f8f2c"/><rect x="164" y="324" width="4" height="4" fill="#79a943"/><rect x="172" y="328" width="4" height="4" fill="#79a943"/>
+    <rect x="200" y="324" width="4" height="12" fill="#4f8f2c"/><rect x="196" y="324" width="4" height="4" fill="#79a943"/><rect x="204" y="328" width="4" height="4" fill="#79a943"/>
+    <rect x="264" y="324" width="4" height="12" fill="#4f8f2c"/><rect x="260" y="324" width="4" height="4" fill="#79a943"/><rect x="268" y="328" width="4" height="4" fill="#79a943"/>
+    <rect x="296" y="324" width="4" height="12" fill="#4f8f2c"/><rect x="292" y="324" width="4" height="4" fill="#79a943"/><rect x="300" y="328" width="4" height="4" fill="#79a943"/>
+    <rect x="328" y="324" width="4" height="12" fill="#4f8f2c"/><rect x="324" y="324" width="4" height="4" fill="#79a943"/>
+    <!-- ростки: ряд 4 -->
+    <rect x="184" y="348" width="4" height="12" fill="#4f8f2c"/><rect x="180" y="348" width="4" height="4" fill="#79a943"/><rect x="188" y="352" width="4" height="4" fill="#79a943"/>
+    <rect x="216" y="348" width="4" height="12" fill="#4f8f2c"/><rect x="212" y="348" width="4" height="4" fill="#79a943"/><rect x="220" y="352" width="4" height="4" fill="#79a943"/>
+    <rect x="248" y="348" width="4" height="12" fill="#4f8f2c"/><rect x="244" y="348" width="4" height="4" fill="#79a943"/><rect x="252" y="352" width="4" height="4" fill="#79a943"/>
+    <rect x="280" y="348" width="4" height="12" fill="#4f8f2c"/><rect x="276" y="348" width="4" height="4" fill="#79a943"/><rect x="284" y="352" width="4" height="4" fill="#79a943"/>
+    <rect x="312" y="348" width="4" height="12" fill="#4f8f2c"/><rect x="308" y="348" width="4" height="4" fill="#79a943"/><rect x="316" y="352" width="4" height="4" fill="#79a943"/>
+    <!-- ростки: ряд 5 -->
+    <rect x="248" y="372" width="4" height="12" fill="#4f8f2c"/><rect x="244" y="372" width="4" height="4" fill="#79a943"/><rect x="252" y="376" width="4" height="4" fill="#79a943"/>
+    <rect x="316" y="372" width="4" height="12" fill="#4f8f2c"/><rect x="312" y="372" width="4" height="4" fill="#79a943"/>
+    <!-- пугало -->
+    <rect x="236" y="208" width="8" height="72" fill="#8a5a2b"/>
+    <rect x="208" y="220" width="64" height="8" fill="#8a5a2b"/>
+    <rect x="200" y="216" width="8" height="12" fill="#e0bd55"/>
+    <rect x="272" y="216" width="8" height="12" fill="#e0bd55"/>
+    <rect x="220" y="212" width="40" height="24" fill="#c96f4a"/>
+    <rect x="228" y="220" width="8" height="8" fill="#a8431f"/>
+    <rect x="224" y="184" width="32" height="28" fill="#e0bd55"/>
+    <rect x="232" y="196" width="4" height="4" fill="#54331a"/>
+    <rect x="244" y="196" width="4" height="4" fill="#54331a"/>
+    <rect x="236" y="204" width="8" height="4" fill="#54331a"/>
+    <rect x="216" y="176" width="48" height="8" fill="#b08a2e"/>
+    <rect x="228" y="164" width="24" height="12" fill="#d8b04a"/>
+    <!-- ворона на перекладине -->
+    <rect x="264" y="208" width="8" height="8" fill="#2b2421"/>
+    <rect x="272" y="208" width="4" height="4" fill="#e3a93a"/>
+    <!-- рабочее место Водителя: ящик с урожаем -->
+    <rect x="200" y="364" width="32" height="36" fill="#9c6b33"/>
+    <rect x="200" y="364" width="32" height="4" fill="#c98e4f"/>
+    <rect x="200" y="380" width="32" height="4" fill="#7a5226"/>
+    <rect x="202" y="352" width="12" height="12" fill="#d96c47"/>
+    <rect x="206" y="348" width="4" height="4" fill="#3a6e1f"/>
+    <rect x="216" y="352" width="12" height="12" fill="#79a943"/>
+    <rect x="220" y="356" width="4" height="4" fill="#6c9a3a"/>
+    <!-- рабочее место Тестера: корзина с зерном -->
+    <rect x="272" y="364" width="40" height="8" fill="#a86f35"/>
+    <rect x="276" y="368" width="32" height="32" fill="#c98e4f"/>
+    <rect x="276" y="376" width="32" height="4" fill="#a86f35"/>
+    <rect x="276" y="388" width="32" height="4" fill="#a86f35"/>
+    <rect x="280" y="356" width="24" height="8" fill="#e0bd55"/>
+    <rect x="284" y="352" width="16" height="4" fill="#e0bd55"/>
+  </g>
+
+  <!-- ===== АМБАР — ОБРАБОТКА (x 350-540) ===== -->
+  <g>
+    <!-- крыша ступенями -->
+    <rect x="410" y="152" width="72" height="8" fill="#54331a"/>
+    <rect x="410" y="160" width="72" height="16" fill="#8c8478"/>
+    <rect x="386" y="176" width="120" height="16" fill="#8c8478"/>
+    <rect x="370" y="192" width="152" height="16" fill="#8c8478"/>
+    <rect x="358" y="208" width="176" height="16" fill="#8c8478"/>
+    <rect x="410" y="172" width="72" height="4" fill="#6e6259"/>
+    <rect x="386" y="188" width="120" height="4" fill="#6e6259"/>
+    <rect x="370" y="204" width="152" height="4" fill="#6e6259"/>
+    <rect x="358" y="220" width="176" height="4" fill="#6e6259"/>
+    <!-- корпус -->
+    <rect x="366" y="224" width="160" height="176" fill="#a8431f"/>
+    <rect x="366" y="380" width="160" height="20" fill="#8a3417"/>
+    <rect x="366" y="224" width="160" height="8" fill="#f3ead2"/>
+    <rect x="366" y="224" width="8" height="176" fill="#f3ead2"/>
+    <rect x="518" y="224" width="8" height="176" fill="#f3ead2"/>
+    <!-- сеновальное окошко -->
+    <rect x="426" y="236" width="40" height="36" fill="#f3ead2"/>
+    <rect x="430" y="240" width="32" height="28" fill="#6b4226"/>
+    <rect x="434" y="260" width="24" height="8" fill="#e0bd55"/>
+    <!-- большие ворота с крестовинами -->
+    <rect x="400" y="304" width="92" height="96" fill="#f3ead2"/>
+    <rect x="406" y="312" width="80" height="88" fill="#8a5a2b"/>
+    <rect x="442" y="312" width="8" height="88" fill="#6b4226"/>
+    <!-- крестовина левой створки -->
+    <rect x="406" y="320" width="12" height="12" fill="#d9ccab"/>
+    <rect x="430" y="320" width="12" height="12" fill="#d9ccab"/>
+    <rect x="418" y="332" width="12" height="12" fill="#d9ccab"/>
+    <rect x="406" y="344" width="12" height="12" fill="#d9ccab"/>
+    <rect x="430" y="344" width="12" height="12" fill="#d9ccab"/>
+    <rect x="406" y="364" width="12" height="12" fill="#d9ccab"/>
+    <rect x="430" y="364" width="12" height="12" fill="#d9ccab"/>
+    <rect x="418" y="376" width="12" height="12" fill="#d9ccab"/>
+    <!-- крестовина правой створки -->
+    <rect x="450" y="320" width="12" height="12" fill="#d9ccab"/>
+    <rect x="474" y="320" width="12" height="12" fill="#d9ccab"/>
+    <rect x="462" y="332" width="12" height="12" fill="#d9ccab"/>
+    <rect x="450" y="344" width="12" height="12" fill="#d9ccab"/>
+    <rect x="474" y="344" width="12" height="12" fill="#d9ccab"/>
+    <rect x="450" y="364" width="12" height="12" fill="#d9ccab"/>
+    <rect x="474" y="364" width="12" height="12" fill="#d9ccab"/>
+    <rect x="462" y="376" width="12" height="12" fill="#d9ccab"/>
+    <!-- ручки ворот -->
+    <rect x="436" y="352" width="4" height="12" fill="#54331a"/>
+    <rect x="452" y="352" width="4" height="12" fill="#54331a"/>
+    <!-- стога сена -->
+    <rect x="500" y="336" width="32" height="28" fill="#e0bd55"/>
+    <rect x="500" y="336" width="32" height="4" fill="#f0d57a"/>
+    <rect x="508" y="336" width="4" height="28" fill="#bd9638"/>
+    <rect x="520" y="336" width="4" height="28" fill="#bd9638"/>
+    <rect x="492" y="364" width="44" height="36" fill="#e0bd55"/>
+    <rect x="492" y="364" width="44" height="4" fill="#f0d57a"/>
+    <rect x="502" y="364" width="4" height="36" fill="#bd9638"/>
+    <rect x="522" y="364" width="4" height="36" fill="#bd9638"/>
+    <!-- верстак Водителя с ведром -->
+    <rect x="364" y="356" width="16" height="16" fill="#8c8478"/>
+    <rect x="364" y="356" width="16" height="4" fill="#6e6259"/>
+    <rect x="368" y="352" width="8" height="4" fill="#54331a"/>
+    <rect x="356" y="372" width="40" height="8" fill="#c98e4f"/>
+    <rect x="356" y="376" width="40" height="4" fill="#9c6b33"/>
+    <rect x="360" y="380" width="8" height="20" fill="#6b4226"/>
+    <rect x="388" y="380" width="8" height="20" fill="#6b4226"/>
+    <!-- верстак Тестера с мешком -->
+    <rect x="460" y="352" width="20" height="20" fill="#e8d9b0"/>
+    <rect x="466" y="348" width="8" height="4" fill="#b9852e"/>
+    <rect x="460" y="360" width="20" height="4" fill="#cfc090"/>
+    <rect x="452" y="372" width="40" height="8" fill="#c98e4f"/>
+    <rect x="452" y="376" width="40" height="4" fill="#9c6b33"/>
+    <rect x="456" y="380" width="8" height="20" fill="#6b4226"/>
+    <rect x="484" y="380" width="8" height="20" fill="#6b4226"/>
+  </g>
+
+  <!-- ===== ТЕПЛИЦА — QA (x 550-740) ===== -->
+  <g>
+    <!-- стеклянная крыша ступенями -->
+    <rect x="604" y="188" width="80" height="8" fill="#f3ead2"/>
+    <rect x="604" y="196" width="80" height="16" fill="#cfe6e6"/>
+    <rect x="580" y="212" width="128" height="16" fill="#cfe6e6"/>
+    <rect x="556" y="228" width="176" height="16" fill="#cfe6e6"/>
+    <rect x="580" y="212" width="128" height="4" fill="#f3ead2"/>
+    <rect x="556" y="228" width="176" height="4" fill="#f3ead2"/>
+    <!-- стеклянные стены -->
+    <rect x="556" y="244" width="176" height="156" fill="#cfe6e6"/>
+    <!-- грядка внутри -->
+    <rect x="560" y="364" width="168" height="24" fill="#8a5a2b"/>
+    <!-- растения внутри -->
+    <rect x="566" y="336" width="12" height="28" fill="#4f8f2c"/>
+    <rect x="564" y="332" width="8" height="4" fill="#79a943"/>
+    <rect x="568" y="344" width="4" height="4" fill="#d96c47"/>
+    <rect x="590" y="336" width="12" height="28" fill="#4f8f2c"/>
+    <rect x="588" y="332" width="8" height="4" fill="#79a943"/>
+    <rect x="592" y="344" width="4" height="4" fill="#d96c47"/>
+    <rect x="614" y="336" width="12" height="28" fill="#4f8f2c"/>
+    <rect x="612" y="332" width="8" height="4" fill="#79a943"/>
+    <rect x="616" y="344" width="4" height="4" fill="#d96c47"/>
+    <rect x="638" y="336" width="12" height="28" fill="#4f8f2c"/>
+    <rect x="636" y="332" width="8" height="4" fill="#79a943"/>
+    <rect x="640" y="344" width="4" height="4" fill="#d96c47"/>
+    <rect x="662" y="336" width="12" height="28" fill="#4f8f2c"/>
+    <rect x="660" y="332" width="8" height="4" fill="#79a943"/>
+    <rect x="664" y="344" width="4" height="4" fill="#d96c47"/>
+    <!-- переплёты рам -->
+    <rect x="556" y="244" width="4" height="156" fill="#f3ead2"/>
+    <rect x="580" y="244" width="4" height="156" fill="#f3ead2"/>
+    <rect x="604" y="244" width="4" height="156" fill="#f3ead2"/>
+    <rect x="628" y="244" width="4" height="156" fill="#f3ead2"/>
+    <rect x="652" y="244" width="4" height="156" fill="#f3ead2"/>
+    <rect x="676" y="244" width="4" height="156" fill="#f3ead2"/>
+    <rect x="700" y="244" width="4" height="156" fill="#f3ead2"/>
+    <rect x="728" y="244" width="4" height="156" fill="#f3ead2"/>
+    <rect x="556" y="244" width="176" height="4" fill="#f3ead2"/>
+    <rect x="556" y="300" width="176" height="4" fill="#f3ead2"/>
+    <rect x="556" y="388" width="176" height="12" fill="#d9ccab"/>
+    <!-- блики на стекле -->
+    <rect x="568" y="252" width="8" height="32" fill="#e8f4f2"/>
+    <rect x="644" y="260" width="8" height="28" fill="#e8f4f2"/>
+    <rect x="712" y="252" width="8" height="24" fill="#e8f4f2"/>
+    <!-- дверь теплицы -->
+    <rect x="688" y="312" width="40" height="88" fill="#f3ead2"/>
+    <rect x="696" y="320" width="24" height="72" fill="#b7dcd8"/>
+    <rect x="716" y="356" width="4" height="8" fill="#54331a"/>
+    <!-- стол Водителя с рассадой -->
+    <rect x="560" y="360" width="12" height="12" fill="#b85c38"/>
+    <rect x="564" y="352" width="4" height="8" fill="#4f8f2c"/>
+    <rect x="560" y="352" width="4" height="4" fill="#79a943"/>
+    <rect x="568" y="356" width="4" height="4" fill="#79a943"/>
+    <rect x="578" y="360" width="12" height="12" fill="#b85c38"/>
+    <rect x="582" y="352" width="4" height="8" fill="#4f8f2c"/>
+    <rect x="586" y="356" width="4" height="4" fill="#79a943"/>
+    <rect x="556" y="372" width="40" height="8" fill="#c98e4f"/>
+    <rect x="556" y="376" width="40" height="4" fill="#9c6b33"/>
+    <rect x="560" y="380" width="8" height="20" fill="#6b4226"/>
+    <rect x="588" y="380" width="8" height="20" fill="#6b4226"/>
+    <!-- стол Тестера с лейкой -->
+    <rect x="634" y="356" width="20" height="16" fill="#8c8478"/>
+    <rect x="634" y="368" width="20" height="4" fill="#6e6259"/>
+    <rect x="652" y="360" width="8" height="4" fill="#8c8478"/>
+    <rect x="640" y="348" width="8" height="4" fill="#54331a"/>
+    <rect x="636" y="352" width="4" height="4" fill="#54331a"/>
+    <rect x="648" y="352" width="4" height="4" fill="#54331a"/>
+    <rect x="626" y="372" width="40" height="8" fill="#c98e4f"/>
+    <rect x="626" y="376" width="40" height="4" fill="#9c6b33"/>
+    <rect x="630" y="380" width="8" height="20" fill="#6b4226"/>
+    <rect x="658" y="380" width="8" height="20" fill="#6b4226"/>
+  </g>
+
+  <!-- ===== РЫНОК — РЕЛИЗ (x 750-960) ===== -->
+  <g>
+    <!-- стойки навеса -->
+    <rect x="762" y="272" width="8" height="128" fill="#9c6b33"/>
+    <rect x="766" y="272" width="4" height="128" fill="#7a5226"/>
+    <rect x="942" y="272" width="8" height="128" fill="#9c6b33"/>
+    <rect x="946" y="272" width="4" height="128" fill="#7a5226"/>
+    <!-- навес в полоску -->
+    <rect x="754" y="228" width="204" height="8" fill="#8a5a2b"/>
+    <rect x="754" y="236" width="24" height="36" fill="#c96f4a"/>
+    <rect x="778" y="236" width="24" height="36" fill="#f3ead2"/>
+    <rect x="802" y="236" width="24" height="36" fill="#c96f4a"/>
+    <rect x="826" y="236" width="24" height="36" fill="#f3ead2"/>
+    <rect x="850" y="236" width="24" height="36" fill="#c96f4a"/>
+    <rect x="874" y="236" width="24" height="36" fill="#f3ead2"/>
+    <rect x="898" y="236" width="24" height="36" fill="#c96f4a"/>
+    <rect x="922" y="236" width="24" height="36" fill="#f3ead2"/>
+    <rect x="946" y="236" width="12" height="36" fill="#c96f4a"/>
+    <rect x="754" y="272" width="24" height="8" fill="#c96f4a"/>
+    <rect x="802" y="272" width="24" height="8" fill="#c96f4a"/>
+    <rect x="850" y="272" width="24" height="8" fill="#c96f4a"/>
+    <rect x="898" y="272" width="24" height="8" fill="#c96f4a"/>
+    <rect x="946" y="272" width="12" height="8" fill="#c96f4a"/>
+    <!-- товар на прилавке: ящик с яблоками (место Водителя) -->
+    <rect x="762" y="328" width="28" height="16" fill="#c98e4f"/>
+    <rect x="762" y="336" width="28" height="4" fill="#a86f35"/>
+    <rect x="764" y="320" width="8" height="8" fill="#b8442e"/>
+    <rect x="774" y="320" width="8" height="8" fill="#b8442e"/>
+    <rect x="782" y="324" width="8" height="8" fill="#b8442e"/>
+    <!-- ящик с зеленью -->
+    <rect x="798" y="332" width="24" height="12" fill="#c98e4f"/>
+    <rect x="800" y="320" width="20" height="12" fill="#79a943"/>
+    <rect x="804" y="324" width="4" height="4" fill="#6c9a3a"/>
+    <rect x="812" y="320" width="4" height="4" fill="#6c9a3a"/>
+    <!-- тыквы -->
+    <rect x="828" y="324" width="20" height="20" fill="#d97b29"/>
+    <rect x="836" y="324" width="4" height="20" fill="#b35e17"/>
+    <rect x="836" y="320" width="4" height="4" fill="#3a6e1f"/>
+    <rect x="850" y="332" width="12" height="12" fill="#d97b29"/>
+    <rect x="854" y="328" width="4" height="4" fill="#3a6e1f"/>
+    <!-- мешок зерна (место Тестера) -->
+    <rect x="860" y="316" width="24" height="28" fill="#e8d9b0"/>
+    <rect x="866" y="316" width="12" height="4" fill="#cfc090"/>
+    <rect x="868" y="312" width="8" height="4" fill="#b9852e"/>
+    <rect x="864" y="332" width="16" height="4" fill="#cfc090"/>
+    <!-- банки с мёдом -->
+    <rect x="892" y="324" width="12" height="20" fill="#e3a93a"/>
+    <rect x="894" y="320" width="8" height="4" fill="#8a5a2b"/>
+    <rect x="906" y="328" width="12" height="16" fill="#e3a93a"/>
+    <rect x="908" y="324" width="8" height="4" fill="#8a5a2b"/>
+    <!-- прилавок -->
+    <rect x="766" y="344" width="180" height="8" fill="#c98e4f"/>
+    <rect x="766" y="352" width="180" height="4" fill="#9c6b33"/>
+    <rect x="770" y="356" width="172" height="44" fill="#9c6b33"/>
+    <rect x="794" y="356" width="4" height="44" fill="#7a5226"/>
+    <rect x="818" y="356" width="4" height="44" fill="#7a5226"/>
+    <rect x="842" y="356" width="4" height="44" fill="#7a5226"/>
+    <rect x="866" y="356" width="4" height="44" fill="#7a5226"/>
+    <rect x="890" y="356" width="4" height="44" fill="#7a5226"/>
+    <rect x="914" y="356" width="4" height="44" fill="#7a5226"/>
+    <rect x="770" y="396" width="172" height="4" fill="#6b4226"/>
+    <!-- ящик с морковью у прилавка -->
+    <rect x="904" y="360" width="36" height="40" fill="#c98e4f"/>
+    <rect x="904" y="360" width="36" height="4" fill="#a86f35"/>
+    <rect x="904" y="376" width="36" height="4" fill="#a86f35"/>
+    <rect x="908" y="352" width="8" height="8" fill="#d97b29"/>
+    <rect x="920" y="352" width="8" height="8" fill="#d97b29"/>
+    <rect x="910" y="348" width="4" height="4" fill="#3a6e1f"/>
+    <rect x="922" y="348" width="4" height="4" fill="#3a6e1f"/>
+  </g>
+
+  <!-- ======== МЕЖЕВЫЕ СТОЛБИКИ У ДОРОЖКИ ======== -->
+  <g>
+    <rect x="136" y="372" width="8" height="28" fill="#8a5a2b"/><rect x="136" y="368" width="8" height="4" fill="#6b4226"/>
+    <rect x="152" y="372" width="8" height="28" fill="#8a5a2b"/><rect x="152" y="368" width="8" height="4" fill="#6b4226"/>
+    <rect x="336" y="372" width="8" height="28" fill="#8a5a2b"/><rect x="336" y="368" width="8" height="4" fill="#6b4226"/>
+    <rect x="352" y="372" width="8" height="28" fill="#8a5a2b"/><rect x="352" y="368" width="8" height="4" fill="#6b4226"/>
+    <rect x="536" y="372" width="8" height="28" fill="#8a5a2b"/><rect x="536" y="368" width="8" height="4" fill="#6b4226"/>
+    <rect x="548" y="372" width="8" height="28" fill="#8a5a2b"/><rect x="548" y="368" width="8" height="4" fill="#6b4226"/>
+    <rect x="736" y="372" width="8" height="28" fill="#8a5a2b"/><rect x="736" y="368" width="8" height="4" fill="#6b4226"/>
+    <rect x="752" y="372" width="8" height="28" fill="#8a5a2b"/><rect x="752" y="368" width="8" height="4" fill="#6b4226"/>
+  </g>
+
+  <!-- ======== НИЖНЯЯ ТРАВЯНАЯ ПОЛОСА (y 440-540) ======== -->
   <rect x="0" y="440" width="960" height="100" fill="url(#fm-grass)"/>
+  <rect x="0" y="440" width="960" height="4" fill="#5f8f3a"/>
   <!-- забор -->
   <g>
     <rect x="0" y="472" width="960" height="8" fill="#9c6b33"/>
@@ -89,458 +483,5 @@
     <rect x="545" y="512" width="2" height="16" fill="#3a6e1f"/><rect x="540" y="506" width="4" height="4" fill="#f6f0dc"/><rect x="548" y="506" width="4" height="4" fill="#f6f0dc"/><rect x="544" y="502" width="4" height="4" fill="#f6f0dc"/><rect x="544" y="510" width="4" height="4" fill="#f6f0dc"/><rect x="544" y="506" width="4" height="4" fill="#e3a93a"/>
     <rect x="769" y="512" width="2" height="16" fill="#3a6e1f"/><rect x="764" y="506" width="4" height="4" fill="#f6f0dc"/><rect x="772" y="506" width="4" height="4" fill="#f6f0dc"/><rect x="768" y="502" width="4" height="4" fill="#f6f0dc"/><rect x="768" y="510" width="4" height="4" fill="#f6f0dc"/><rect x="768" y="506" width="4" height="4" fill="#e3a93a"/>
     <rect x="929" y="512" width="2" height="16" fill="#3a6e1f"/><rect x="924" y="506" width="4" height="4" fill="#f6f0dc"/><rect x="932" y="506" width="4" height="4" fill="#f6f0dc"/><rect x="928" y="502" width="4" height="4" fill="#f6f0dc"/><rect x="928" y="510" width="4" height="4" fill="#f6f0dc"/><rect x="928" y="506" width="4" height="4" fill="#e3a93a"/>
-  </g>
-
-  <!-- ======== СРЕДНЯЯ ПОЛОСА: КОМНАТЫ (y 84-440) ======== -->
-  <!-- обои -->
-  <rect x="0" y="84" width="140" height="308" fill="url(#fm-wp-cabinet)"/>
-  <rect x="150" y="84" width="190" height="308" fill="url(#fm-wp-kitchen)"/>
-  <rect x="350" y="84" width="190" height="308" fill="url(#fm-wp-corridor)"/>
-  <rect x="550" y="84" width="190" height="308" fill="url(#fm-wp-living)"/>
-  <rect x="750" y="84" width="210" height="308" fill="url(#fm-wp-bath)"/>
-  <!-- плинтус -->
-  <rect x="0" y="392" width="960" height="8" fill="#8a5a2b"/>
-  <rect x="0" y="392" width="960" height="2" fill="#6b4226"/>
-  <!-- дощатый пол / дорожка Босса (y 400-440) -->
-  <rect x="0" y="400" width="960" height="40" fill="url(#fm-planks)"/>
-
-  <!-- ===== КАБИНЕТ БОССА (x 0-140) ===== -->
-  <g>
-    <!-- гирлянда флажков -->
-    <rect x="12" y="104" width="116" height="2" fill="#6b4226"/>
-    <rect x="16" y="106" width="16" height="12" fill="#c96f4a"/><rect x="22" y="114" width="4" height="4" fill="#ecdcb4"/>
-    <rect x="44" y="106" width="16" height="12" fill="#7fae46"/><rect x="50" y="114" width="4" height="4" fill="#ecdcb4"/>
-    <rect x="72" y="106" width="16" height="12" fill="#e3a93a"/><rect x="78" y="114" width="4" height="4" fill="#ecdcb4"/>
-    <rect x="100" y="106" width="16" height="12" fill="#5a9bbf"/><rect x="106" y="114" width="4" height="4" fill="#ecdcb4"/>
-    <!-- вымпел фермы с золотым колосом -->
-    <rect x="16" y="136" width="48" height="8" fill="#6b4226"/>
-    <rect x="20" y="144" width="40" height="52" fill="#a8431f"/>
-    <rect x="20" y="144" width="40" height="6" fill="#c96f4a"/>
-    <rect x="20" y="196" width="12" height="16" fill="#a8431f"/>
-    <rect x="48" y="196" width="12" height="16" fill="#a8431f"/>
-    <rect x="26" y="156" width="28" height="4" fill="#e3a93a"/>
-    <rect x="38" y="164" width="4" height="24" fill="#e3a93a"/>
-    <rect x="32" y="168" width="6" height="4" fill="#e3a93a"/>
-    <rect x="42" y="168" width="6" height="4" fill="#e3a93a"/>
-    <rect x="34" y="176" width="4" height="4" fill="#b9852e"/>
-    <rect x="42" y="176" width="4" height="4" fill="#b9852e"/>
-    <!-- книжный шкаф Босса -->
-    <rect x="68" y="152" width="60" height="120" fill="#8a5a2b"/>
-    <rect x="68" y="152" width="60" height="4" fill="#c98e4f"/>
-    <rect x="72" y="160" width="52" height="44" fill="#6b4226"/>
-    <rect x="72" y="212" width="52" height="52" fill="#6b4226"/>
-    <rect x="68" y="204" width="60" height="8" fill="#c98e4f"/>
-    <rect x="76" y="168" width="8" height="36" fill="#a8431f"/>
-    <rect x="84" y="172" width="8" height="32" fill="#5a9bbf"/>
-    <rect x="92" y="168" width="8" height="36" fill="#3a6e1f"/>
-    <rect x="100" y="172" width="8" height="32" fill="#e3a93a"/>
-    <rect x="108" y="168" width="8" height="36" fill="#c96f4a"/>
-    <rect x="76" y="232" width="8" height="32" fill="#5a9bbf"/>
-    <rect x="84" y="228" width="8" height="36" fill="#c96f4a"/>
-    <rect x="92" y="232" width="8" height="32" fill="#e3a93a"/>
-    <rect x="100" y="228" width="8" height="36" fill="#a8431f"/>
-    <rect x="108" y="232" width="8" height="32" fill="#3a6e1f"/>
-    <!-- письменный стол -->
-    <rect x="12" y="344" width="104" height="8" fill="#8a5a2b"/>
-    <rect x="12" y="344" width="104" height="2" fill="#c98e4f"/>
-    <rect x="16" y="352" width="8" height="48" fill="#6b4226"/>
-    <rect x="104" y="352" width="8" height="48" fill="#6b4226"/>
-    <rect x="28" y="352" width="72" height="28" fill="#9c6b33"/>
-    <rect x="28" y="352" width="72" height="2" fill="#7a5226"/>
-    <!-- бумаги и чернильница -->
-    <rect x="32" y="332" width="20" height="12" fill="#f3ead2"/>
-    <rect x="36" y="336" width="12" height="2" fill="#cfc090"/>
-    <rect x="60" y="336" width="16" height="8" fill="#f3ead2"/>
-    <rect x="88" y="332" width="8" height="12" fill="#3a2417"/>
-  </g>
-
-  <!-- ===== КУХНЯ / СБОРКА (x 150-340) ===== -->
-  <g>
-    <!-- окно -->
-    <rect x="282" y="112" width="56" height="68" fill="#8a5a2b"/>
-    <rect x="288" y="118" width="44" height="56" fill="#aacfe8"/>
-    <rect x="294" y="126" width="12" height="6" fill="#f6f0dc"/>
-    <rect x="288" y="142" width="44" height="4" fill="#8a5a2b"/>
-    <rect x="308" y="118" width="4" height="56" fill="#8a5a2b"/>
-    <rect x="278" y="180" width="64" height="8" fill="#6b4226"/>
-    <!-- холодильник (у левой стены, ужат под крупные столы) -->
-    <rect x="154" y="296" width="34" height="104" fill="#e8e0d0"/>
-    <rect x="154" y="296" width="34" height="2" fill="#b3a99a"/>
-    <rect x="154" y="296" width="2" height="104" fill="#b3a99a"/>
-    <rect x="154" y="336" width="34" height="2" fill="#b3a99a"/>
-    <rect x="180" y="308" width="4" height="16" fill="#8a5a2b"/>
-    <rect x="180" y="344" width="4" height="16" fill="#8a5a2b"/>
-    <!-- навесной шкафчик с дверцами -->
-    <rect x="156" y="192" width="60" height="56" fill="#9c6b33"/>
-    <rect x="156" y="192" width="60" height="4" fill="#c98e4f"/>
-    <rect x="160" y="200" width="24" height="40" fill="#7a5226"/>
-    <rect x="162" y="202" width="20" height="36" fill="#8a5a2b"/>
-    <rect x="188" y="200" width="24" height="40" fill="#7a5226"/>
-    <rect x="190" y="202" width="20" height="36" fill="#8a5a2b"/>
-    <rect x="178" y="216" width="4" height="8" fill="#3a2417"/>
-    <rect x="190" y="216" width="4" height="8" fill="#3a2417"/>
-    <!-- полка с банками заготовок: мёд, томаты, соленья -->
-    <rect x="220" y="232" width="56" height="8" fill="#8a5a2b"/>
-    <rect x="220" y="232" width="56" height="2" fill="#c98e4f"/>
-    <rect x="224" y="208" width="14" height="24" fill="#e3a93a"/>
-    <rect x="224" y="208" width="14" height="4" fill="#b9852e"/>
-    <rect x="226" y="202" width="10" height="6" fill="#8a5a2b"/>
-    <rect x="242" y="212" width="14" height="20" fill="#c96f4a"/>
-    <rect x="246" y="218" width="6" height="6" fill="#a8431f"/>
-    <rect x="244" y="206" width="10" height="6" fill="#8a5a2b"/>
-    <rect x="260" y="208" width="14" height="24" fill="#79a943"/>
-    <rect x="262" y="214" width="4" height="12" fill="#6c9a3a"/>
-    <rect x="262" y="202" width="10" height="6" fill="#8a5a2b"/>
-    <!-- подвесные сковороды под окном -->
-    <rect x="286" y="196" width="52" height="4" fill="#6b4226"/>
-    <rect x="294" y="200" width="2" height="6" fill="#3a2417"/>
-    <rect x="320" y="200" width="2" height="6" fill="#3a2417"/>
-    <rect x="288" y="206" width="16" height="4" fill="#6e6259"/>
-    <rect x="286" y="210" width="20" height="14" fill="#8c8478"/>
-    <rect x="288" y="222" width="16" height="2" fill="#6e6259"/>
-    <rect x="314" y="206" width="14" height="4" fill="#8c8478"/>
-    <rect x="312" y="210" width="18" height="12" fill="#6e6259"/>
-    <!-- полка с кастрюлями и банками (над рабочими столами) -->
-    <rect x="200" y="288" width="96" height="8" fill="#8a5a2b"/>
-    <rect x="200" y="288" width="96" height="2" fill="#c98e4f"/>
-    <rect x="208" y="276" width="20" height="12" fill="#6e6259"/>
-    <rect x="206" y="274" width="24" height="4" fill="#8c8478"/>
-    <rect x="216" y="270" width="4" height="4" fill="#54331a"/>
-    <rect x="240" y="276" width="12" height="12" fill="#e3a93a"/>
-    <rect x="240" y="276" width="12" height="2" fill="#b9852e"/>
-    <rect x="242" y="272" width="8" height="4" fill="#8a5a2b"/>
-    <rect x="260" y="276" width="16" height="12" fill="#b85c38"/>
-    <rect x="262" y="272" width="12" height="4" fill="#9c4a2c"/>
-    <!-- рабочий стол Водителя (слева, 1.5x) -->
-    <rect x="190" y="336" width="44" height="12" fill="#8a5a2b"/>
-    <rect x="190" y="336" width="44" height="4" fill="#c98e4f"/>
-    <rect x="192" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="226" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="198" y="372" width="28" height="8" fill="#6b4226"/>
-    <!-- реквизит кухни: ящик с урожаем на столе -->
-    <rect x="194" y="316" width="36" height="20" fill="#9c6b33"/>
-    <rect x="194" y="316" width="36" height="4" fill="#c98e4f"/>
-    <rect x="194" y="332" width="36" height="4" fill="#7a5226"/>
-    <rect x="210" y="320" width="4" height="12" fill="#7a5226"/>
-    <rect x="196" y="308" width="12" height="8" fill="#d96c47"/>
-    <rect x="200" y="304" width="4" height="4" fill="#3a6e1f"/>
-    <rect x="214" y="308" width="12" height="8" fill="#79a943"/>
-    <rect x="217" y="311" width="6" height="3" fill="#6c9a3a"/>
-    <!-- рабочий стол Тестера (справа, 1.5x) -->
-    <rect x="262" y="336" width="44" height="12" fill="#8a5a2b"/>
-    <rect x="262" y="336" width="44" height="4" fill="#c98e4f"/>
-    <rect x="264" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="298" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="270" y="372" width="28" height="8" fill="#6b4226"/>
-    <rect x="272" y="324" width="16" height="12" fill="#f3ead2"/>
-    <rect x="274" y="327" width="12" height="2" fill="#b3a99a"/>
-    <rect x="274" y="331" width="12" height="2" fill="#b3a99a"/>
-    <rect x="290" y="324" width="6" height="12" fill="#3a2417"/>
-  </g>
-
-  <!-- ===== КОРИДОР / ОБРАБОТКА (x 350-540) ===== -->
-  <g>
-    <!-- картина 1: пейзаж -->
-    <rect x="382" y="124" width="32" height="40" fill="#8a5a2b"/>
-    <rect x="386" y="128" width="24" height="32" fill="#aacfe8"/>
-    <rect x="386" y="148" width="24" height="12" fill="#7fae46"/>
-    <rect x="402" y="132" width="6" height="6" fill="#e3a93a"/>
-    <!-- настенные часы -->
-    <rect x="442" y="108" width="28" height="36" fill="#8a5a2b"/>
-    <rect x="446" y="112" width="20" height="28" fill="#f3ead2"/>
-    <rect x="454" y="116" width="2" height="10" fill="#3a2417"/>
-    <rect x="454" y="124" width="8" height="2" fill="#3a2417"/>
-    <!-- картина 2: амбар -->
-    <rect x="486" y="124" width="32" height="40" fill="#8a5a2b"/>
-    <rect x="490" y="128" width="24" height="32" fill="#ecdcb4"/>
-    <rect x="492" y="134" width="20" height="6" fill="#6b4226"/>
-    <rect x="494" y="140" width="16" height="14" fill="#a8431f"/>
-    <rect x="500" y="146" width="6" height="8" fill="#54331a"/>
-    <!-- вешалка: плащ и шарф на крюках -->
-    <rect x="358" y="200" width="68" height="8" fill="#8a5a2b"/>
-    <rect x="358" y="200" width="68" height="2" fill="#c98e4f"/>
-    <rect x="366" y="208" width="4" height="10" fill="#6b4226"/>
-    <rect x="390" y="208" width="4" height="10" fill="#6b4226"/>
-    <rect x="414" y="208" width="4" height="10" fill="#6b4226"/>
-    <rect x="360" y="214" width="16" height="44" fill="#c96f4a"/>
-    <rect x="360" y="214" width="16" height="6" fill="#a8431f"/>
-    <rect x="362" y="258" width="12" height="6" fill="#a8431f"/>
-    <rect x="388" y="214" width="8" height="34" fill="#7fae46"/>
-    <rect x="388" y="230" width="8" height="4" fill="#4f8f2c"/>
-    <rect x="388" y="244" width="8" height="4" fill="#4f8f2c"/>
-    <!-- плакат «Урожай» с кнопками -->
-    <rect x="434" y="188" width="44" height="72" fill="#f3ead2"/>
-    <rect x="434" y="188" width="44" height="4" fill="#cfc090"/>
-    <rect x="434" y="256" width="44" height="4" fill="#cfc090"/>
-    <rect x="448" y="196" width="16" height="16" fill="#d96c47"/>
-    <rect x="452" y="192" width="8" height="4" fill="#3a6e1f"/>
-    <rect x="440" y="220" width="32" height="4" fill="#b3a99a"/>
-    <rect x="440" y="228" width="32" height="4" fill="#b3a99a"/>
-    <rect x="440" y="236" width="24" height="4" fill="#b3a99a"/>
-    <rect x="440" y="248" width="16" height="4" fill="#8a5a2b"/>
-    <rect x="436" y="190" width="4" height="4" fill="#a8431f"/>
-    <rect x="472" y="190" width="4" height="4" fill="#a8431f"/>
-    <!-- настенный фонарь с тёплым огоньком -->
-    <rect x="502" y="184" width="12" height="6" fill="#6b4226"/>
-    <rect x="506" y="190" width="4" height="8" fill="#3a2417"/>
-    <rect x="498" y="198" width="20" height="6" fill="#6e6259"/>
-    <rect x="496" y="204" width="24" height="24" fill="#8c8478"/>
-    <rect x="500" y="208" width="16" height="16" fill="#f6d56a"/>
-    <rect x="504" y="212" width="8" height="8" fill="#e3a93a"/>
-    <rect x="500" y="228" width="16" height="4" fill="#6e6259"/>
-    <!-- рабочий стол Водителя (слева, 1.5x) -->
-    <rect x="350" y="336" width="44" height="12" fill="#8a5a2b"/>
-    <rect x="350" y="336" width="44" height="4" fill="#c98e4f"/>
-    <rect x="352" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="386" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="358" y="372" width="28" height="8" fill="#6b4226"/>
-    <!-- реквизит коридора: стопка бумаг и чернильница с пером -->
-    <rect x="354" y="318" width="24" height="18" fill="#f3ead2"/>
-    <rect x="354" y="322" width="24" height="2" fill="#cfc090"/>
-    <rect x="354" y="327" width="24" height="2" fill="#cfc090"/>
-    <rect x="354" y="332" width="24" height="2" fill="#cfc090"/>
-    <rect x="382" y="321" width="10" height="15" fill="#3a2417"/>
-    <rect x="385" y="312" width="4" height="9" fill="#8a5a2b"/>
-    <rect x="386" y="308" width="3" height="4" fill="#c98e4f"/>
-    <!-- рабочий стол Тестера (справа, 1.5x) -->
-    <rect x="442" y="336" width="44" height="12" fill="#8a5a2b"/>
-    <rect x="442" y="336" width="44" height="4" fill="#c98e4f"/>
-    <rect x="444" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="478" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="450" y="372" width="28" height="8" fill="#6b4226"/>
-    <rect x="452" y="324" width="16" height="12" fill="#f3ead2"/>
-    <rect x="454" y="327" width="12" height="2" fill="#b3a99a"/>
-    <rect x="454" y="331" width="12" height="2" fill="#b3a99a"/>
-    <rect x="470" y="324" width="6" height="12" fill="#3a2417"/>
-    <!-- растение в кадке -->
-    <rect x="514" y="340" width="16" height="12" fill="#3a6e1f"/>
-    <rect x="510" y="348" width="24" height="12" fill="#4f8f2c"/>
-    <rect x="514" y="358" width="16" height="8" fill="#3a6e1f"/>
-    <rect x="510" y="366" width="24" height="6" fill="#b85c38"/>
-    <rect x="514" y="372" width="16" height="24" fill="#9c4a2c"/>
-    <rect x="512" y="396" width="20" height="4" fill="#7a3a22"/>
-    <!-- ковровая дорожка на полу -->
-    <rect x="364" y="404" width="164" height="28" fill="#a8431f"/>
-    <rect x="364" y="404" width="164" height="4" fill="#e3a93a"/>
-    <rect x="364" y="428" width="164" height="4" fill="#e3a93a"/>
-    <rect x="364" y="404" width="4" height="28" fill="#e3a93a"/>
-    <rect x="524" y="404" width="4" height="28" fill="#e3a93a"/>
-    <rect x="396" y="414" width="8" height="8" fill="#c96f4a"/>
-    <rect x="436" y="414" width="8" height="8" fill="#c96f4a"/>
-    <rect x="476" y="414" width="8" height="8" fill="#c96f4a"/>
-  </g>
-
-  <!-- ===== ГОСТИНАЯ / QA (x 550-740) ===== -->
-  <g>
-    <!-- настенная полка с книгами -->
-    <rect x="566" y="196" width="92" height="8" fill="#8a5a2b"/>
-    <rect x="566" y="196" width="92" height="2" fill="#c98e4f"/>
-    <rect x="574" y="172" width="8" height="24" fill="#a8431f"/>
-    <rect x="582" y="176" width="8" height="20" fill="#5a9bbf"/>
-    <rect x="590" y="172" width="8" height="24" fill="#3a6e1f"/>
-    <rect x="598" y="176" width="8" height="20" fill="#e3a93a"/>
-    <rect x="606" y="172" width="8" height="24" fill="#c96f4a"/>
-    <rect x="614" y="176" width="8" height="20" fill="#3a6e1f"/>
-    <rect x="622" y="172" width="8" height="24" fill="#5a9bbf"/>
-    <rect x="634" y="188" width="16" height="8" fill="#a8431f"/>
-    <!-- пробковая доска с записками QA: галочка и крестик -->
-    <rect x="558" y="220" width="84" height="68" fill="#6b4226"/>
-    <rect x="562" y="224" width="76" height="60" fill="#c98e4f"/>
-    <rect x="568" y="232" width="20" height="16" fill="#f6f0dc"/>
-    <rect x="570" y="236" width="16" height="2" fill="#b3a99a"/>
-    <rect x="570" y="240" width="12" height="2" fill="#b3a99a"/>
-    <rect x="576" y="230" width="4" height="4" fill="#a8431f"/>
-    <rect x="596" y="228" width="24" height="24" fill="#f3ead2"/>
-    <rect x="606" y="226" width="4" height="4" fill="#5a9bbf"/>
-    <rect x="600" y="240" width="4" height="4" fill="#3a6e1f"/>
-    <rect x="604" y="244" width="4" height="4" fill="#3a6e1f"/>
-    <rect x="608" y="240" width="4" height="4" fill="#3a6e1f"/>
-    <rect x="612" y="236" width="4" height="4" fill="#3a6e1f"/>
-    <rect x="568" y="256" width="24" height="20" fill="#f3ead2"/>
-    <rect x="578" y="254" width="4" height="4" fill="#a8431f"/>
-    <rect x="572" y="260" width="4" height="4" fill="#a8431f"/>
-    <rect x="580" y="260" width="4" height="4" fill="#a8431f"/>
-    <rect x="576" y="264" width="4" height="4" fill="#a8431f"/>
-    <rect x="572" y="268" width="4" height="4" fill="#a8431f"/>
-    <rect x="580" y="268" width="4" height="4" fill="#a8431f"/>
-    <rect x="600" y="260" width="20" height="16" fill="#f6f0dc"/>
-    <rect x="604" y="258" width="4" height="4" fill="#5a9bbf"/>
-    <rect x="602" y="266" width="14" height="2" fill="#b3a99a"/>
-    <rect x="602" y="270" width="12" height="2" fill="#b3a99a"/>
-    <!-- настенная полочка с геранью и кружкой -->
-    <rect x="646" y="244" width="36" height="8" fill="#8a5a2b"/>
-    <rect x="646" y="244" width="36" height="2" fill="#c98e4f"/>
-    <rect x="650" y="232" width="12" height="12" fill="#9c4a2c"/>
-    <rect x="650" y="224" width="12" height="8" fill="#4f8f2c"/>
-    <rect x="652" y="216" width="8" height="8" fill="#79a943"/>
-    <rect x="654" y="218" width="4" height="4" fill="#d96c47"/>
-    <rect x="668" y="230" width="10" height="14" fill="#5a9bbf"/>
-    <rect x="678" y="233" width="3" height="7" fill="#5a9bbf"/>
-    <!-- рабочий стол Водителя (слева, 1.5x) -->
-    <rect x="550" y="336" width="44" height="12" fill="#8a5a2b"/>
-    <rect x="550" y="336" width="44" height="4" fill="#c98e4f"/>
-    <rect x="552" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="586" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="558" y="372" width="28" height="8" fill="#6b4226"/>
-    <!-- реквизит QA: лупа и банка с образцом -->
-    <rect x="552" y="320" width="16" height="16" fill="#8a5a2b"/>
-    <rect x="555" y="323" width="10" height="10" fill="#aacfe8"/>
-    <rect x="568" y="330" width="12" height="5" fill="#6b4226"/>
-    <rect x="582" y="316" width="12" height="3" fill="#8a5a2b"/>
-    <rect x="582" y="319" width="12" height="17" fill="#cfe6e6"/>
-    <rect x="585" y="328" width="6" height="8" fill="#79a943"/>
-    <!-- рабочий стол Тестера (справа, 1.5x) -->
-    <rect x="624" y="336" width="44" height="12" fill="#8a5a2b"/>
-    <rect x="624" y="336" width="44" height="4" fill="#c98e4f"/>
-    <rect x="626" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="660" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="632" y="372" width="28" height="8" fill="#6b4226"/>
-    <rect x="634" y="324" width="16" height="12" fill="#f3ead2"/>
-    <rect x="636" y="327" width="12" height="2" fill="#b3a99a"/>
-    <rect x="636" y="331" width="12" height="2" fill="#b3a99a"/>
-    <rect x="652" y="324" width="6" height="12" fill="#3a2417"/>
-    <!-- камин -->
-    <rect x="686" y="284" width="56" height="8" fill="#8a5a2b"/>
-    <rect x="690" y="292" width="48" height="108" fill="#8c8478"/>
-    <rect x="690" y="316" width="48" height="2" fill="#6e6259"/>
-    <rect x="690" y="344" width="48" height="2" fill="#6e6259"/>
-    <rect x="690" y="372" width="48" height="2" fill="#6e6259"/>
-    <rect x="710" y="292" width="2" height="24" fill="#6e6259"/>
-    <rect x="726" y="318" width="2" height="26" fill="#6e6259"/>
-    <rect x="700" y="340" width="28" height="60" fill="#2b2421"/>
-    <g id="fireplace-fire">
-      <rect x="704" y="356" width="20" height="32" fill="#c96f4a"/>
-      <rect x="708" y="364" width="12" height="24" fill="#e3a93a"/>
-      <rect x="710" y="372" width="8" height="16" fill="#f6d56a"/>
-      <rect x="702" y="388" width="24" height="8" fill="#6b4226"/>
-    </g>
-    <rect id="fireplace-glow" x="694" y="400" width="40" height="6" fill="#e3a93a" fill-opacity="0.35"/>
-    <!-- каминные часы на полке -->
-    <rect x="700" y="248" width="28" height="36" fill="#8a5a2b"/>
-    <rect x="704" y="244" width="20" height="4" fill="#6b4226"/>
-    <rect x="704" y="256" width="20" height="20" fill="#f3ead2"/>
-    <rect x="712" y="260" width="2" height="8" fill="#3a2417"/>
-    <rect x="712" y="266" width="8" height="2" fill="#3a2417"/>
-    <!-- круглый ковёр -->
-    <rect x="616" y="404" width="56" height="4" fill="#6f9a3c"/>
-    <rect x="604" y="408" width="80" height="4" fill="#6f9a3c"/>
-    <rect x="596" y="412" width="96" height="8" fill="#6f9a3c"/>
-    <rect x="604" y="420" width="80" height="4" fill="#6f9a3c"/>
-    <rect x="616" y="424" width="56" height="4" fill="#6f9a3c"/>
-    <rect x="620" y="412" width="48" height="8" fill="#9fc46a"/>
-  </g>
-
-  <!-- ===== ВАННАЯ / РЕЛИЗ (x 750-960) ===== -->
-  <g>
-    <!-- маленькое окно (высоко на стене) -->
-    <rect x="896" y="140" width="44" height="56" fill="#8a5a2b"/>
-    <rect x="902" y="146" width="32" height="44" fill="#aacfe8"/>
-    <rect x="916" y="146" width="4" height="44" fill="#8a5a2b"/>
-    <rect x="902" y="164" width="32" height="4" fill="#8a5a2b"/>
-    <rect x="906" y="150" width="8" height="6" fill="#f6f0dc"/>
-    <rect x="892" y="196" width="52" height="8" fill="#6b4226"/>
-    <!-- настенный шкафчик-аптечка -->
-    <rect x="758" y="196" width="60" height="64" fill="#e8e0d0"/>
-    <rect x="758" y="196" width="60" height="4" fill="#f6f0dc"/>
-    <rect x="758" y="256" width="60" height="4" fill="#b3a99a"/>
-    <rect x="758" y="196" width="2" height="64" fill="#b3a99a"/>
-    <rect x="816" y="196" width="2" height="64" fill="#b3a99a"/>
-    <rect x="764" y="204" width="22" height="48" fill="#f3ead2"/>
-    <rect x="790" y="204" width="22" height="48" fill="#f3ead2"/>
-    <rect x="784" y="222" width="4" height="12" fill="#8c8478"/>
-    <rect x="788" y="222" width="4" height="12" fill="#8c8478"/>
-    <rect x="770" y="216" width="12" height="4" fill="#3a6e1f"/>
-    <rect x="774" y="212" width="4" height="12" fill="#3a6e1f"/>
-    <!-- рейл с полотенцами -->
-    <rect x="824" y="212" width="64" height="6" fill="#8a5a2b"/>
-    <rect x="824" y="212" width="64" height="2" fill="#c98e4f"/>
-    <rect x="830" y="218" width="22" height="44" fill="#aacfe8"/>
-    <rect x="830" y="230" width="22" height="4" fill="#5a9bbf"/>
-    <rect x="830" y="246" width="22" height="4" fill="#5a9bbf"/>
-    <rect x="858" y="218" width="22" height="36" fill="#f3ead2"/>
-    <rect x="858" y="230" width="22" height="4" fill="#cfc090"/>
-    <rect x="858" y="242" width="22" height="4" fill="#cfc090"/>
-    <!-- зеркало -->
-    <rect x="880" y="244" width="40" height="52" fill="#8a5a2b"/>
-    <rect x="884" y="248" width="32" height="44" fill="#cfe6e6"/>
-    <rect x="888" y="252" width="4" height="16" fill="#e8f4f2"/>
-    <rect x="894" y="258" width="4" height="10" fill="#e8f4f2"/>
-    <!-- полотенце на крючке -->
-    <rect x="934" y="268" width="6" height="6" fill="#6b4226"/>
-    <rect x="926" y="274" width="22" height="42" fill="#c96f4a"/>
-    <rect x="926" y="288" width="22" height="4" fill="#a8431f"/>
-    <rect x="926" y="302" width="22" height="4" fill="#a8431f"/>
-    <!-- рабочий стол Водителя (слева, 1.5x) -->
-    <rect x="754" y="336" width="44" height="12" fill="#8a5a2b"/>
-    <rect x="754" y="336" width="44" height="4" fill="#c98e4f"/>
-    <rect x="756" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="790" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="762" y="372" width="28" height="8" fill="#6b4226"/>
-    <!-- реквизит релиза: штемпельная подушка и печать -->
-    <rect x="756" y="327" width="20" height="9" fill="#6b4226"/>
-    <rect x="759" y="330" width="14" height="6" fill="#a8431f"/>
-    <rect x="780" y="306" width="12" height="4" fill="#c98e4f"/>
-    <rect x="782" y="310" width="8" height="12" fill="#8a5a2b"/>
-    <rect x="778" y="322" width="16" height="14" fill="#6b4226"/>
-    <!-- рабочий стол Тестера (справа, 1.5x) -->
-    <rect x="850" y="336" width="44" height="12" fill="#8a5a2b"/>
-    <rect x="850" y="336" width="44" height="4" fill="#c98e4f"/>
-    <rect x="852" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="886" y="348" width="6" height="52" fill="#6b4226"/>
-    <rect x="858" y="372" width="28" height="8" fill="#6b4226"/>
-    <rect x="860" y="324" width="16" height="12" fill="#f3ead2"/>
-    <rect x="862" y="327" width="12" height="2" fill="#b3a99a"/>
-    <rect x="862" y="331" width="12" height="2" fill="#b3a99a"/>
-    <rect x="878" y="324" width="6" height="12" fill="#3a2417"/>
-    <!-- ванна на львиных лапах (у правой стены) -->
-    <rect x="938" y="336" width="12" height="4" fill="#8c8478"/>
-    <rect x="946" y="336" width="4" height="16" fill="#8c8478"/>
-    <rect x="916" y="352" width="40" height="8" fill="#f3ead2"/>
-    <rect x="916" y="352" width="40" height="2" fill="#fbf6e8"/>
-    <rect x="920" y="360" width="32" height="28" fill="#e8e0d0"/>
-    <rect x="924" y="360" width="24" height="4" fill="#aacfe8"/>
-    <rect x="920" y="380" width="32" height="8" fill="#cfc8b8"/>
-    <rect x="922" y="388" width="8" height="12" fill="#b9852e"/>
-    <rect x="942" y="388" width="8" height="12" fill="#b9852e"/>
-  </g>
-
-  <!-- ======== СТЕНЫ МЕЖДУ КОМНАТАМИ (двери на высоте дорожки) ======== -->
-  <rect x="140" y="84" width="10" height="296" fill="#54331a"/>
-  <rect x="340" y="84" width="10" height="296" fill="#54331a"/>
-  <rect x="540" y="84" width="10" height="296" fill="#54331a"/>
-  <rect x="740" y="84" width="10" height="296" fill="#54331a"/>
-  <!-- перемычки дверных проёмов -->
-  <rect x="136" y="372" width="18" height="8" fill="#8a5a2b"/>
-  <rect x="336" y="372" width="18" height="8" fill="#8a5a2b"/>
-  <rect x="536" y="372" width="18" height="8" fill="#8a5a2b"/>
-  <rect x="736" y="372" width="18" height="8" fill="#8a5a2b"/>
-  <!-- торцы дома -->
-  <rect x="0" y="84" width="4" height="356" fill="#54331a"/>
-  <rect x="956" y="84" width="4" height="356" fill="#54331a"/>
-  <!-- цоколь дома -->
-  <rect x="0" y="440" width="960" height="4" fill="#54331a"/>
-
-  <!-- ======== КРЫША (y 0-84) ======== -->
-  <rect x="0" y="0" width="960" height="8" fill="#8a5a2b"/>
-  <rect x="0" y="8" width="960" height="4" fill="#54331a"/>
-  <rect x="0" y="12" width="960" height="64" fill="url(#fm-shingles)"/>
-  <rect x="0" y="76" width="960" height="8" fill="#8a5a2b"/>
-  <rect x="0" y="82" width="960" height="2" fill="#54331a"/>
-  <!-- кирпичная труба (x ~300) -->
-  <g>
-    <g id="chimney-smoke">
-      <rect x="300" y="0" width="8" height="8" fill="#c5b8aa"/>
-      <rect x="314" y="2" width="6" height="6" fill="#d6cbbf"/>
-    </g>
-    <rect x="282" y="8" width="52" height="12" fill="#6e6259"/>
-    <rect x="282" y="8" width="52" height="2" fill="#54331a"/>
-    <rect x="288" y="20" width="40" height="36" fill="#9a5a44"/>
-    <rect x="288" y="28" width="40" height="2" fill="#7a4434"/>
-    <rect x="288" y="36" width="40" height="2" fill="#7a4434"/>
-    <rect x="288" y="44" width="40" height="2" fill="#7a4434"/>
-    <rect x="300" y="20" width="2" height="8" fill="#7a4434"/>
-    <rect x="312" y="30" width="2" height="6" fill="#7a4434"/>
-    <rect x="296" y="38" width="2" height="6" fill="#7a4434"/>
-    <rect x="316" y="46" width="2" height="8" fill="#7a4434"/>
   </g>
 </svg>

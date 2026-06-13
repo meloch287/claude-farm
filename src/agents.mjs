@@ -1,5 +1,8 @@
 // Agents for "Клауд Ферма": sim runners (deterministic, used by tests and
-// the demo) and experimental claude runners that spawn the `claude` CLI.
+// the demo) and real CLI runners — claude (`claude -p`) and codex
+// (`codex exec`). The claude path additionally supports the ULTRACODE mode:
+// in the Теплица (living) zone parallel subagents review the result before
+// the Sniffer verdict.
 //
 // Runners NEVER emit events themselves — the orchestrator does. A driver may
 // return { message } and a tester returns a verdict:
@@ -25,13 +28,22 @@ function resolveOutputDir(config) {
   return path.isAbsolute(dir) ? dir : path.resolve(PROJECT_ROOT, dir);
 }
 
-/** Parse a CSV string (header "Имя;Дата") into data rows, like a user would. */
+/**
+ * Parse a CSV string into data rows, like a user would.
+ * Header with ";" (e.g. "Имя;Дата") -> {name, date} rows;
+ * single-column header (e.g. "Текст") -> {text} rows.
+ */
 function parseCsvRows(csv) {
   const lines = String(csv ?? '')
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
-  return lines.slice(1).map((line) => {
+  const header = lines[0] ?? '';
+  const body = lines.slice(1);
+  if (!header.includes(';')) {
+    return body.map((line) => ({ text: line }));
+  }
+  return body.map((line) => {
     const [name = '', date = ''] = line.split(';').map((part) => part.trim());
     return { name, date };
   });
@@ -43,7 +55,7 @@ function parseCsvRows(csv) {
 
 export function createSimRunners() {
   const drivers = {
-    // Кухня — The Scraper: raw input -> trimmed non-empty lines.
+    // Поле — The Scraper: raw input -> trimmed non-empty lines.
     async kitchen(ctx) {
       let lines = String(ctx.task.input ?? '')
         .split(/\r?\n/)
@@ -63,26 +75,34 @@ export function createSimRunners() {
       return { message: `Собрано строк: ${lines.length}` };
     },
 
-    // Коридор — The Editor: lines "Имя;DD.MM.YYYY" -> rows + CSV.
+    // Амбар — The Editor: lines "Имя;DD.MM.YYYY" -> rows + CSV.
+    // Arbitrary text without ";" becomes single-column rows (header «Текст»).
     async corridor(ctx) {
-      const rows = (ctx.data.lines ?? []).map((line) => {
-        const [name = '', date = ''] = line.split(';').map((part) => part.trim());
-        return { name, date };
-      });
+      const lines = ctx.data.lines ?? [];
+      if (lines.some((line) => line.includes(';'))) {
+        const rows = lines.map((line) => {
+          const [name = '', date = ''] = line.split(';').map((part) => part.trim());
+          return { name, date };
+        });
+        ctx.data.rows = rows;
+        ctx.data.csv =
+          ['Имя;Дата', ...rows.map((row) => `${row.name};${row.date}`)].join('\n') + '\n';
+        return { message: `Свёрстан CSV: ${rows.length} строк` };
+      }
+      const rows = lines.map((line) => ({ text: line }));
       ctx.data.rows = rows;
-      ctx.data.csv =
-        ['Имя;Дата', ...rows.map((row) => `${row.name};${row.date}`)].join('\n') + '\n';
+      ctx.data.csv = ['Текст', ...rows.map((row) => row.text)].join('\n') + '\n';
       return { message: `Свёрстан CSV: ${rows.length} строк` };
     },
 
-    // Гостиная — The Runner: re-opens the CSV like a user would.
+    // Теплица — The Runner: re-opens the CSV like a user would.
     async living(ctx) {
       const rows = parseCsvRows(ctx.data.csv);
       ctx.data.qa = { rowsOpened: rows.length };
       return { message: `Открыто строк: ${rows.length}` };
     },
 
-    // Ванная — The Archiver: writes result.csv + manifest.json, zips the folder.
+    // Рынок — The Archiver: writes result.csv + manifest.json, zips the folder.
     async bath(ctx) {
       const baseDir = resolveOutputDir(ctx.config);
       const taskDir = path.join(baseDir, ctx.task.id);
@@ -118,7 +138,7 @@ export function createSimRunners() {
   };
 
   const testers = {
-    // Кухня — The Cleaner: there must be at least one line.
+    // Поле — The Cleaner: there must be at least one line.
     async kitchen(ctx) {
       const count = ctx.data.lines?.length ?? 0;
       if (count > 0) {
@@ -131,17 +151,25 @@ export function createSimRunners() {
       };
     },
 
-    // Коридор — The Validator: every date must be a real calendar date.
+    // Амбар — The Validator: every token that LOOKS like a date
+    // (dd.mm.yyyy) must be a real calendar date; anything else passes.
     async corridor(ctx) {
       for (const row of ctx.data.rows ?? []) {
-        const match = DATE_RE.exec(row.date);
-        let valid = false;
-        let fixed = null;
+        const tokens = typeof row.date === 'string'
+          ? [row.date]
+          : String(row.text ?? '').split(/\s+/).filter(Boolean);
 
-        if (match) {
+        for (const token of tokens) {
+          const match = DATE_RE.exec(token);
+          if (!match) {
+            continue; // не похоже на дату — не проверяем
+          }
+
           const day = Number(match[1]);
           const month = Number(match[2]);
           const year = Number(match[3]);
+          let valid = false;
+          let fixed = null;
           if (month >= 1 && month <= 12) {
             const maxDay = daysInMonth(month, year);
             if (day >= 1 && day <= maxDay) {
@@ -151,35 +179,48 @@ export function createSimRunners() {
               fixed = `${String(maxDay).padStart(2, '0')}.${match[2]}.${match[3]}`;
             }
           }
-        }
 
-        if (!valid) {
-          if (!ctx.data.fixRequest && fixed) {
-            ctx.data.fixRequest = { bad: row.date, fixed };
+          if (!valid) {
+            if (!ctx.data.fixRequest && fixed) {
+              ctx.data.fixRequest = { bad: token, fixed };
+            }
+            return {
+              ok: false,
+              reason: `Дата ${token} не существует`,
+              bounceTo: 'kitchen',
+            };
           }
-          return {
-            ok: false,
-            reason: `Дата ${row.date} не существует`,
-            bounceTo: 'kitchen',
-          };
         }
       }
       return { ok: true, note: 'Все даты настоящие' };
     },
 
-    // Гостиная — The Sniffer: no empty fields, no duplicate rows.
+    // Теплица — The Sniffer: no empty fields, no duplicate rows.
+    // Single-column CSV rows are keyed by their text.
     async living(ctx) {
       const rows = parseCsvRows(ctx.data.csv);
       const seen = new Set();
       for (const row of rows) {
-        if (!row.name || !row.date) {
-          return {
-            ok: false,
-            reason: `Пустое поле в строке «${row.name};${row.date}»`,
-            bounceTo: 'corridor',
-          };
+        let key;
+        if (typeof row.text === 'string') {
+          if (!row.text) {
+            return {
+              ok: false,
+              reason: 'Пустая строка в данных',
+              bounceTo: 'corridor',
+            };
+          }
+          key = row.text;
+        } else {
+          if (!row.name || !row.date) {
+            return {
+              ok: false,
+              reason: `Пустое поле в строке «${row.name};${row.date}»`,
+              bounceTo: 'corridor',
+            };
+          }
+          key = `${row.name};${row.date}`;
         }
-        const key = `${row.name};${row.date}`;
         if (seen.has(key)) {
           return {
             ok: false,
@@ -195,7 +236,7 @@ export function createSimRunners() {
       };
     },
 
-    // Ванная — The Sign-Off: both release files exist and are non-empty.
+    // Рынок — The Sign-Off: both release files exist and are non-empty.
     async bath(ctx) {
       const baseDir = resolveOutputDir(ctx.config);
       const taskDir = ctx.data.release?.dir ?? path.join(baseDir, ctx.task.id);
@@ -244,43 +285,47 @@ export function createSimRunners() {
 }
 
 // ---------------------------------------------------------------------------
-// CLAUDE runners — experimental real mode: spawns the `claude` CLI.
-// Never used by tests.
+// CLI runners — real executors: the Амбар (corridor) Editor actually performs
+// the task via a local CLI (claude or codex), the other roles prepare, verify
+// and package the deliverable. Never spawned by tests.
 // ---------------------------------------------------------------------------
 
-const ZONE_DRIVER_TASKS = {
-  kitchen: 'разбери входной текст задачи на чистые строки и опиши результат',
-  corridor: 'преобразуй строки вида «Имя;ДД.ММ.ГГГГ» в CSV с заголовком «Имя;Дата»',
-  living: 'просмотри CSV глазами пользователя и опиши, что открылось',
-  bath: 'подготовь итоговый пакет к релизу и опиши его содержимое',
-};
+const CLAUDE_TIMEOUT_MS = 120_000;
+const CODEX_TIMEOUT_MS = 180_000;
 
-const ZONE_TESTER_TASKS = {
-  kitchen: 'проверь, что строки собраны и их больше нуля',
-  corridor: 'проверь, что все даты — настоящие календарные даты в формате ДД.ММ.ГГГГ',
-  living: 'проверь, что нет пустых полей и дубликатов строк',
-  bath: 'проверь, что итоговые файлы готовы и не пустые',
-};
-
-function summarizeData(ctx, limit = 3000) {
-  let json;
-  try {
-    json = JSON.stringify(ctx.data) ?? '{}';
-  } catch {
-    json = '{}';
-  }
-  if (json.length > limit) {
-    json = json.slice(0, limit) + '…';
-  }
-  return json;
+/** Clip long text for prompts. */
+function clip(text, limit = 6000) {
+  const str = String(text ?? '');
+  return str.length > limit ? str.slice(0, limit) + '…' : str;
 }
 
-function runClaudeCli(prompt, config) {
-  const timeoutMs = config?.claudeTimeoutMs ?? 180_000;
-  const args = ['-p', prompt];
-  if (config?.model) {
-    args.push('--model', config.model);
+/** First non-empty line, shortened — used for dashboard messages. */
+function firstLine(text, limit = 120) {
+  const line = String(text ?? '')
+    .split('\n')
+    .map((part) => part.trim())
+    .find((part) => part.length > 0);
+  return (line ?? '').slice(0, limit);
+}
+
+/**
+ * Parse a tester reply: first word ОК/OK => ok:true,
+ * anything else => ok:false with the rest as the reason.
+ */
+function parseVerdict(text) {
+  const trimmed = String(text ?? '').trim();
+  const word = (trimmed.match(/[A-Za-zА-Яа-яЁё]+/) ?? [''])[0].toUpperCase();
+  const rest = trimmed
+    .replace(/^[^A-Za-zА-Яа-яЁё]*[A-Za-zА-Яа-яЁё]+[\s:,.—-]*/, '')
+    .trim();
+  if (word === 'ОК' || word === 'OK') {
+    return { ok: true, note: rest || undefined };
   }
+  return { ok: false, reason: rest || trimmed || 'Тестер нашёл проблему' };
+}
+
+/** Spawn an arbitrary CLI prompt call. Resolves {ok, text} | {ok:false, error}. */
+function runCliPrompt(cmd, args, timeoutMs) {
   return new Promise((resolve) => {
     let settled = false;
     const settle = (result) => {
@@ -293,7 +338,7 @@ function runClaudeCli(prompt, config) {
 
     let child;
     try {
-      child = spawn('claude', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
       settle({ ok: false, error: String(err?.message ?? err) });
       return;
@@ -332,80 +377,437 @@ function runClaudeCli(prompt, config) {
   });
 }
 
+/** `claude -p <prompt> [--model <model>]`; model defaults to config.model. */
+function runClaudeCli(prompt, config, model) {
+  const args = ['-p', prompt];
+  const effectiveModel = model ?? config?.model;
+  if (effectiveModel) {
+    args.push('--model', effectiveModel);
+  }
+  return runCliPrompt('claude', args, config?.claudeTimeoutMs ?? CLAUDE_TIMEOUT_MS);
+}
+
+/**
+ * `codex exec --model <model> -c model_reasoning_effort=<low|medium> <prompt>`.
+ * speed "faster" maps to low reasoning effort, "normal" to medium.
+ */
+function runCodexCli(prompt, config, { model, speed } = {}) {
+  const effort = speed === 'faster' ? 'low' : 'medium';
+  const args = [
+    'exec',
+    '--model', model ?? 'gpt-5.5',
+    '-c', `model_reasoning_effort=${effort}`,
+    prompt,
+  ];
+  return runCliPrompt('codex', args, config?.codexTimeoutMs ?? CODEX_TIMEOUT_MS);
+}
+
+// ---------------------------------------------------------------------------
+// ULTRACODE subagents (claude engine only): parallel reviewers in Теплица.
+// Pure planning + injectable `ask` so tests never spawn a real CLI.
+// ---------------------------------------------------------------------------
+
+/** Per-type subagent briefs (the actual instruction sent to the model). */
+export const SUBAGENT_BRIEFS = Object.freeze({
+  review: 'сделай ревью результата',
+  bugs: 'найди ошибки/несостыковки',
+  optimize: 'предложи улучшения',
+  factcheck: 'проверь факты',
+});
+
+/** Russian labels for dashboard messages. */
+export const SUBAGENT_LABELS = Object.freeze({
+  review: 'ревью',
+  bugs: 'поиск ошибок',
+  optimize: 'оптимизация',
+  factcheck: 'факт-чекинг',
+});
+
+const SUBAGENT_FANOUT_CAP = 8;
+
+/**
+ * Plan the fan-out: count (capped at 8) parallel calls, one per enabled type,
+ * cycling through the types when count exceeds them. Pure.
+ * @param {{count?: number, types?: string[]}} [subagents]
+ * @returns {string[]} ordered list of subagent types to spawn
+ */
+export function planSubagents(subagents) {
+  const types = Array.isArray(subagents?.types)
+    ? subagents.types.filter((type) => type in SUBAGENT_BRIEFS)
+    : [];
+  const count = Math.min(
+    Number.isInteger(subagents?.count) && subagents.count > 0 ? subagents.count : 0,
+    SUBAGENT_FANOUT_CAP
+  );
+  if (count === 0 || types.length === 0) {
+    return [];
+  }
+  return Array.from({ length: count }, (_, i) => types[i % types.length]);
+}
+
+/** Build a subagent prompt for a given type against the task result. */
+export function buildSubagentPrompt(type, taskTitle, resultText) {
+  return [
+    `Ты — субагент-проверяющий на конвейере «Клауд Ферма». Твоя роль: ${SUBAGENT_LABELS[type] ?? type}.`,
+    `Инструкция: ${SUBAGENT_BRIEFS[type] ?? 'проверь результат'}.`,
+    taskTitle ? `Задача: «${taskTitle}».` : null,
+    `Результат:\n${clip(resultText)}`,
+    'Если реальных проблем нет — напиши «Проблем не найдено». Иначе перечисли проблемы списком. Ответ по-русски, кратко.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/**
+ * Run the ultracode fan-out: spawn the planned subagents IN PARALLEL via the
+ * injected `ask` and merge their findings into a digest for the Sniffer.
+ * Failed calls are kept in the digest with an honest note — never throws.
+ * @param {{subagents?: object, taskTitle?: string, result?: string,
+ *          ask: (prompt: string) => Promise<{ok: boolean, text?: string, error?: string}>}} args
+ * @returns {Promise<{count: number, types: string[], findings: Array<{type: string, ok: boolean, text: string}>, digest: string}>}
+ */
+export async function runSubagentFanout({ subagents, taskTitle, result, ask }) {
+  const plan = planSubagents(subagents);
+  if (plan.length === 0) {
+    return { count: 0, types: [], findings: [], digest: '' };
+  }
+  const findings = await Promise.all(
+    plan.map(async (type) => {
+      try {
+        const reply = await ask(buildSubagentPrompt(type, taskTitle, result));
+        if (reply?.ok === true) {
+          return { type, ok: true, text: String(reply.text ?? '').trim() };
+        }
+        return { type, ok: false, text: `субагент недоступен: ${reply?.error ?? 'нет ответа'}` };
+      } catch (err) {
+        return { type, ok: false, text: `субагент недоступен: ${String(err?.message ?? err)}` };
+      }
+    })
+  );
+  const digest = findings
+    .map((f, i) => `[субагент ${i + 1}, ${SUBAGENT_LABELS[f.type] ?? f.type}] ${f.text}`)
+    .join('\n');
+  return { count: plan.length, types: [...new Set(plan)], findings, digest };
+}
+
+/** Human list of subagent type labels: «ревью, поиск ошибок». */
+export function describeSubagentTypes(types) {
+  return types.map((type) => SUBAGENT_LABELS[type] ?? type).join(', ');
+}
+
+/** The task runs ultracode when its claude config says so and the plan is non-empty. */
+function isUltracode(taskConfig) {
+  return taskConfig?.engine !== 'codex'
+    && taskConfig?.mode === 'ultracode'
+    && planSubagents(taskConfig?.subagents).length > 0;
+}
+
 export function createClaudeRunners(config) {
-  const zones = config?.zones ?? [];
+  // Task model comes from the per-task config; config.model is the fallback.
+  const ask = (ctx, prompt) => runClaudeCli(prompt, config, ctx.task?.config?.model);
+  // Ultracode subagents run on their own (usually cheaper) model.
+  const askSubagent = (ctx, prompt) =>
+    runClaudeCli(prompt, config, ctx.task?.config?.subagents?.model);
+  return createCliRunners(config, {
+    executorName: 'claude',
+    cliLabel: 'claude CLI',
+    ask,
+    askSubagent,
+  });
+}
 
-  const zoneById = (zoneId) => zones.find((zone) => zone.id === zoneId);
+export function createCodexRunners(config) {
+  // Codex path: model + speed from the per-task config; NO subagents.
+  const ask = (ctx, prompt) => runCodexCli(prompt, config, {
+    model: ctx.task?.config?.model,
+    speed: ctx.task?.config?.speed,
+  });
+  return createCliRunners(config, {
+    executorName: 'codex',
+    cliLabel: 'codex CLI',
+    ask,
+  });
+}
 
-  // Bounce target: previous zone in the pipeline, or itself for the first one.
-  const bounceTarget = (zoneId) => {
-    const index = zones.findIndex((zone) => zone.id === zoneId);
-    return index > 0 ? zones[index - 1].id : zoneId;
+function createCliRunners(config, { executorName, cliLabel, ask, askSubagent }) {
+
+  // A failed CLI call never throws: the driver stores the error note and the
+  // zone tester turns it into a БАГ so the pipeline bounces/fails gracefully.
+  const noteError = (ctx, zoneId, error) => {
+    ctx.data.errors = { ...ctx.data.errors, [zoneId]: String(error) };
+  };
+  const clearError = (ctx, zoneId) => {
+    if (ctx.data.errors) {
+      delete ctx.data.errors[zoneId];
+    }
   };
 
-  return {
-    async runDriver(zoneId, ctx) {
-      const zone = zoneById(zoneId);
+  // Fix note from a bouncing tester: the retry pass improves the brief/result.
+  const fixNoteLine = (ctx) =>
+    ctx.data.fixNote
+      ? `Замечание проверяющего с прошлой попытки (обязательно учти и исправь): ${clip(ctx.data.fixNote, 800)}`
+      : null;
+
+  const bag = (ctx, reason, bounceTo) => {
+    ctx.data.fixNote = reason;
+    return { ok: false, reason, bounceTo };
+  };
+
+  const drivers = {
+    // Поле — The Scraper: готовит материалы и план для задачи -> ctx.data.brief.
+    async kitchen(ctx) {
       const prompt = [
-        `Ты — агент «${zone?.driver?.name ?? zoneId}» на конвейере «Клауд Ферма», зона «${zone?.title ?? zoneId}».`,
-        `Твоя работа: ${ZONE_DRIVER_TASKS[zoneId] ?? 'обработай данные задачи'}.`,
+        'Ты — Scraper, сборщик на конвейере «Клауд Ферма».',
+        'Подготовь сжатые материалы и план выполнения задачи: что именно сделать, ключевые факты, структура будущего результата.',
         `Задача: «${ctx.task.title}».`,
-        zoneId === 'kitchen' ? `Входной текст:\n${ctx.task.input}` : null,
-        `Текущие данные (JSON): ${summarizeData(ctx)}`,
-        'Ответь кратким отчётом на русском языке, обычным текстом.',
+        ctx.task.input ? `Данные задачи:\n${clip(ctx.task.input, 4000)}` : null,
+        fixNoteLine(ctx),
+        'Ответь кратко, по-русски, обычным текстом.',
       ]
         .filter(Boolean)
         .join('\n\n');
 
-      const result = await runClaudeCli(prompt, config);
+      const result = await ask(ctx, prompt);
       if (!result.ok) {
-        ctx.data.claude = { ...ctx.data.claude, [zoneId]: { error: result.error } };
-        return { message: `Клауд недоступен: ${result.error}` };
+        noteError(ctx, 'kitchen', result.error);
+        return { message: `Scraper: ${cliLabel} не ответил (${result.error})` };
       }
-
-      ctx.data.claude = { ...ctx.data.claude, [zoneId]: { report: result.text } };
-      const firstLine = result.text.split('\n')[0].slice(0, 120);
-      return { message: firstLine };
+      clearError(ctx, 'kitchen');
+      ctx.data.brief = result.text;
+      return { message: `Материалы готовы: ${firstLine(result.text)}` };
     },
 
-    async runTester(zoneId, ctx) {
-      const zone = zoneById(zoneId);
+    // Амбар — The Editor: ВЫПОЛНЯЕТ задачу по-настоящему -> ctx.data.result.
+    async corridor(ctx) {
       const prompt = [
-        `Ты — тестировщик «${zone?.tester?.name ?? zoneId}» на конвейере «Клауд Ферма», зона «${zone?.title ?? zoneId}».`,
-        `Твоя проверка: ${ZONE_TESTER_TASKS[zoneId] ?? 'проверь результат работы драйвера'}.`,
+        'Ты — Editor на конвейере «Клауд Ферма». ВЫПОЛНИ задачу по-настоящему, как если бы пользователь спросил ассистента напрямую.',
         `Задача: «${ctx.task.title}».`,
-        `Текущие данные (JSON): ${summarizeData(ctx)}`,
-        'Первым словом ответа напиши ОК (если всё хорошо) или БАГ (если есть проблема), затем краткое пояснение на русском.',
+        ctx.task.input ? `Данные задачи:\n${clip(ctx.task.input, 4000)}` : null,
+        ctx.data.brief ? `Материалы и план от Scraper:\n${clip(ctx.data.brief)}` : null,
+        fixNoteLine(ctx),
+        'Выдай ГОТОВЫЙ результат в markdown — только сам результат, без преамбулы, без вопросов и без пояснений о процессе.',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
+      const result = await ask(ctx, prompt);
+      if (!result.ok) {
+        noteError(ctx, 'corridor', result.error);
+        return { message: `Editor: ${cliLabel} не ответил (${result.error})` };
+      }
+      clearError(ctx, 'corridor');
+      ctx.data.result = result.text;
+      return { message: `Результат готов: ${firstLine(result.text)}` };
+    },
+
+    // Теплица — The Runner: читает результат глазами пользователя -> ctx.data.qa.
+    // ULTRACODE (claude): перед вердиктом Sniffer'а параллельные субагенты
+    // проверяют результат, их находки попадают в ctx.data.qa.
+    async living(ctx) {
+      const prompt = [
+        'Ты — Runner на конвейере «Клауд Ферма». Прочитай готовый результат глазами пользователя.',
+        `Задача: «${ctx.task.title}».`,
+        `Результат:\n${clip(ctx.data.result)}`,
+        'Кратко (3-5 пунктов, по-русски): что получилось, понятно ли, полезно ли.',
       ].join('\n\n');
 
-      const result = await runClaudeCli(prompt, config);
+      const result = await ask(ctx, prompt);
       if (!result.ok) {
-        return {
-          ok: false,
-          reason: `Клауд недоступен: ${result.error}`,
-          bounceTo: bounceTarget(zoneId),
+        noteError(ctx, 'living', result.error);
+        return { message: `Runner: ${cliLabel} не ответил (${result.error})` };
+      }
+      clearError(ctx, 'living');
+      ctx.data.qa = result.text;
+
+      // Ultracode fan-out — claude engine only (codex runners pass no askSubagent).
+      if (askSubagent && isUltracode(ctx.task?.config)) {
+        const fan = await runSubagentFanout({
+          subagents: ctx.task.config.subagents,
+          taskTitle: ctx.task.title,
+          result: ctx.data.result,
+          ask: (subPrompt) => askSubagent(ctx, subPrompt),
+        });
+        if (fan.count > 0) {
+          ctx.data.qa += `\n\nНаходки субагентов:\n${fan.digest}`;
+          ctx.data.subagents = { count: fan.count, types: fan.types };
+          return {
+            message: `Заметки готовы, результат проверили ${fan.count} субагентов (${describeSubagentTypes(fan.types)})`,
+          };
+        }
+      }
+      return { message: `Заметки пользователя: ${firstLine(result.text)}` };
+    },
+
+    // Рынок — The Archiver: пишет result.md (деливерабл) + manifest.json + zip.
+    async bath(ctx) {
+      const baseDir = resolveOutputDir(ctx.config);
+      const taskDir = path.join(baseDir, ctx.task.id);
+      try {
+        await mkdir(taskDir, { recursive: true });
+
+        const resultPath = path.join(taskDir, 'result.md');
+        const manifestPath = path.join(taskDir, 'manifest.json');
+        const manifest = {
+          title: ctx.task.title,
+          attempts: ctx.task.attempts,
+          executor: executorName,
+          finishedAt: new Date().toISOString(),
         };
+
+        await writeFile(resultPath, ctx.data.result ?? '', 'utf8');
+        await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+        // Best-effort zip via the zip CLI; absence or failure is fine.
+        await new Promise((resolve) => {
+          execFile(
+            'zip',
+            ['-r', `${ctx.task.id}.zip`, ctx.task.id],
+            { cwd: baseDir },
+            () => resolve()
+          );
+        });
+
+        clearError(ctx, 'bath');
+        ctx.data.release = { dir: taskDir, resultPath, manifestPath };
+        return {
+          message: `Релиз упакован в ${path.join(ctx.config?.outputDir ?? 'output', ctx.task.id)}`,
+        };
+      } catch (err) {
+        noteError(ctx, 'bath', err?.message ?? err);
+        return { message: `Archiver: не удалось записать релиз (${String(err?.message ?? err)})` };
+      }
+    },
+  };
+
+  const testers = {
+    // Поле — The Cleaner: проверяет полноту brief; первым словом «ОК»/«БАГ».
+    async kitchen(ctx) {
+      if (ctx.data.errors?.kitchen) {
+        return bag(ctx, `Scraper не подготовил материалы: ${ctx.data.errors.kitchen}`, 'kitchen');
+      }
+      if (!String(ctx.data.brief ?? '').trim()) {
+        return bag(ctx, 'Материалы пустые — Scraper ничего не собрал', 'kitchen');
       }
 
-      const text = result.text.trim();
-      const firstWord = (text.match(/[A-Za-zА-Яа-яЁё]+/) ?? [''])[0].toUpperCase();
-      const rest = text.replace(/^[^A-Za-zА-Яа-яЁё]*[A-Za-zА-Яа-яЁё]+[\s:,.—-]*/, '').trim();
+      const prompt = [
+        'Ты — Cleaner на конвейере «Клауд Ферма». Проверь полноту материалов: достаточно ли их, чтобы выполнить задачу.',
+        `Задача: «${ctx.task.title}».`,
+        `Материалы:\n${clip(ctx.data.brief)}`,
+        'ПЕРВЫМ СЛОВОМ ответа напиши «ОК» (если материалов достаточно) или «БАГ: причина». Ответ по-русски, кратко.',
+      ].join('\n\n');
 
-      if (firstWord === 'ОК' || firstWord === 'OK') {
-        return { ok: true, note: rest || undefined };
+      const result = await ask(ctx, prompt);
+      if (!result.ok) {
+        return bag(ctx, `${cliLabel} недоступен: ${result.error}`, 'kitchen');
       }
-      if (firstWord === 'БАГ') {
-        return {
-          ok: false,
-          reason: rest || 'Тестер нашёл проблему',
-          bounceTo: bounceTarget(zoneId),
-        };
+      const verdict = parseVerdict(result.text);
+      return verdict.ok ? verdict : bag(ctx, verdict.reason, 'kitchen');
+    },
+
+    // Амбар — The Validator: проверяет результат по существу против задачи.
+    // БАГ => возврат на поле, замечание сохраняется для улучшения brief.
+    async corridor(ctx) {
+      if (ctx.data.errors?.corridor) {
+        return bag(ctx, `Editor не выполнил задачу: ${ctx.data.errors.corridor}`, 'kitchen');
       }
-      return {
-        ok: false,
-        reason: `Непонятный вердикт тестера: «${text.slice(0, 80)}»`,
-        bounceTo: bounceTarget(zoneId),
-      };
+      if (!String(ctx.data.result ?? '').trim()) {
+        return bag(ctx, 'Результат пуст — задача не выполнена', 'kitchen');
+      }
+
+      const prompt = [
+        'Ты — Validator на конвейере «Клауд Ферма». Проверь результат ПО СУЩЕСТВУ против задачи: действительно ли задача выполнена и результат пригоден.',
+        `Задача: «${ctx.task.title}».`,
+        ctx.task.input ? `Данные задачи:\n${clip(ctx.task.input, 4000)}` : null,
+        `Результат:\n${clip(ctx.data.result)}`,
+        'ПЕРВЫМ СЛОВОМ ответа напиши «ОК» или «БАГ: что не так». Ответ по-русски, кратко.',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
+      const result = await ask(ctx, prompt);
+      if (!result.ok) {
+        return bag(ctx, `${cliLabel} недоступен: ${result.error}`, 'kitchen');
+      }
+      const verdict = parseVerdict(result.text);
+      return verdict.ok ? verdict : bag(ctx, verdict.reason, 'kitchen');
+    },
+
+    // Теплица — The Sniffer: придирчивый поиск проблем; БАГ => в амбар.
+    // В ультракоде Sniffer получает дайджест находок субагентов: реальные
+    // проблемы из дайджеста => вердикт БАГ с причинами.
+    async living(ctx) {
+      if (ctx.data.errors?.living) {
+        return bag(ctx, `Runner не посмотрел результат: ${ctx.data.errors.living}`, 'corridor');
+      }
+
+      const hasSubagents = Boolean(ctx.data.subagents?.count);
+      const prompt = [
+        'Ты — Sniffer на конвейере «Клауд Ферма». Придирчиво поищи проблемы в результате: ошибки, пропуски, несоответствие задаче, сырые места.',
+        `Задача: «${ctx.task.title}».`,
+        `Результат:\n${clip(ctx.data.result)}`,
+        ctx.data.qa
+          ? `${hasSubagents ? 'Заметки пользователя (Runner) и находки субагентов' : 'Заметки пользователя (Runner)'}:\n${clip(ctx.data.qa, 4000)}`
+          : null,
+        hasSubagents
+          ? 'Субагенты уже проверили результат — их находки выше. Если среди находок есть РЕАЛЬНЫЕ проблемы (ошибки, несоответствие задаче), вердикт обязан быть «БАГ» с перечислением причин.'
+          : null,
+        'ПЕРВЫМ СЛОВОМ ответа напиши «ОК» или «БАГ: причина». Ответ по-русски, кратко.',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
+      const result = await ask(ctx, prompt);
+      if (!result.ok) {
+        return bag(ctx, `${cliLabel} недоступен: ${result.error}`, 'corridor');
+      }
+      const verdict = parseVerdict(result.text);
+      return verdict.ok ? verdict : bag(ctx, verdict.reason, 'corridor');
+    },
+
+    // Рынок — The Sign-Off: файлы релиза существуют и не пустые.
+    async bath(ctx) {
+      if (ctx.data.errors?.bath) {
+        return bag(ctx, `Archiver не записал релиз: ${ctx.data.errors.bath}`, 'bath');
+      }
+      const baseDir = resolveOutputDir(ctx.config);
+      const taskDir = ctx.data.release?.dir ?? path.join(baseDir, ctx.task.id);
+      const resultPath = ctx.data.release?.resultPath ?? path.join(taskDir, 'result.md');
+      const manifestPath =
+        ctx.data.release?.manifestPath ?? path.join(taskDir, 'manifest.json');
+      try {
+        const [resultStat, manifestStat] = await Promise.all([
+          stat(resultPath),
+          stat(manifestPath),
+        ]);
+        if (resultStat.size > 0 && manifestStat.size > 0) {
+          return { ok: true, note: 'Клиенту можно отправлять!' };
+        }
+        // Empty deliverable means the result itself is bad — regenerate it.
+        return bag(
+          ctx,
+          'Файлы релиза пустые',
+          String(ctx.data.result ?? '').trim() ? 'bath' : 'corridor'
+        );
+      } catch {
+        return bag(ctx, 'Файлы релиза не найдены', 'bath');
+      }
+    },
+  };
+
+  return {
+    async runDriver(zoneId, ctx) {
+      const driver = drivers[zoneId];
+      if (!driver) {
+        throw new Error(`Неизвестная зона для драйвера: ${zoneId}`);
+      }
+      return driver(ctx);
+    },
+    async runTester(zoneId, ctx) {
+      const tester = testers[zoneId];
+      if (!tester) {
+        throw new Error(`Неизвестная зона для тестера: ${zoneId}`);
+      }
+      return tester(ctx);
     },
   };
 }

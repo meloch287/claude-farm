@@ -1,5 +1,6 @@
 // HTTP server for "Клауд Ферма": serves the pixel dashboard, streams farm
-// events over SSE, exposes a state snapshot and a demo trigger.
+// events over SSE and exposes a state snapshot, the task API and the global
+// settings API (GET/PUT /api/settings).
 
 import http from 'node:http';
 import path from 'node:path';
@@ -8,11 +9,16 @@ import { fileURLToPath } from 'node:url';
 
 import { createEventBus } from './events.mjs';
 import { createFarm } from './orchestrator.mjs';
-import { createSimRunners } from './agents.mjs';
+import { createSimRunners, createClaudeRunners, createCodexRunners } from './agents.mjs';
+import {
+  createTaskStore,
+  createSettingsStore,
+  detectClaudeCli,
+  detectCodexCli,
+} from './tasks.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DASHBOARD_DIR = path.join(ROOT, 'dashboard');
-const DEMO_FILE = path.join(ROOT, 'demo', 'demo-task.txt');
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -36,7 +42,7 @@ function sendText(res, statusCode, text) {
 }
 
 const EVENT_TYPES = new Set([
-  'task.created', 'zone.enter',
+  'task.queued', 'task.created', 'zone.enter',
   'driver.start', 'driver.done',
   'tester.start', 'tester.ok', 'tester.bounce',
   'task.done', 'task.failed',
@@ -64,12 +70,53 @@ function readBody(req, limit = 64 * 1024) {
  */
 export function startServer({ config = {}, bus = createEventBus() } = {}) {
   const requestedPort = config.port ?? 8787;
-  // One farm instance per server so demo task ids keep incrementing (t1, t2, ...).
-  // stepDelayMs paces demo events at ~15s per zone (5 events x 3000ms) so the
+  // Sim farm: fallback executor when the claude CLI is unavailable.
+  // stepDelayMs paces sim events at ~15s per zone (5 events x 3000ms) so the
   // dashboard choreography (boss walk -> handoff -> work -> carry -> check)
   // stays within one beat of reality without the catch-up queue compressing it.
   // Tests and the CLI pass their own config and are unaffected.
-  const demoFarm = createFarm({ ...config, stepDelayMs: 3000 }, createSimRunners(), bus);
+  const simFarm = createFarm({ ...config, stepDelayMs: 3000 }, createSimRunners(), bus);
+  // Real executors: the claude and codex CLI farms. Minimal pacing — the CLI
+  // calls are the natural delay, and the boss wants real tasks done fast.
+  const claudeFarm = createFarm(
+    { ...config, stepDelayMs: 300 },
+    createClaudeRunners(config),
+    bus
+  );
+  const codexFarm = createFarm(
+    { ...config, stepDelayMs: 300 },
+    createCodexRunners(config),
+    bus
+  );
+
+  // Probe both CLIs ONCE at boot; the cached results pick the executor per
+  // task and are exposed in /api/state as {claudeExecutor, codexExecutor}.
+  let claudeExecutor = false;
+  const claudeAvailable = detectClaudeCli().then((ok) => {
+    claudeExecutor = ok;
+    return ok;
+  });
+  let codexExecutor = false;
+  const codexAvailable = detectCodexCli().then((ok) => {
+    codexExecutor = ok;
+    return ok;
+  });
+
+  // Global settings (engine Клауд/Кодекс, models, ultracode subagents),
+  // persisted at output/settings.json.
+  const settings = createSettingsStore({ config });
+
+  // Task store: kanban board state + strictly sequential FIFO queue feeding
+  // one farm at a time. Persists/restores output/tasks-state.json.
+  const farms = { sim: simFarm, claude: claudeFarm, codex: codexFarm };
+  const store = createTaskStore({
+    bus,
+    config,
+    claudeAvailable: () => claudeAvailable,
+    codexAvailable: () => codexAvailable,
+    getSettings: () => settings.get(),
+    runQueueTask: (spec, executor) => (farms[executor] ?? simFarm).runTask(spec),
+  });
 
   function handleSse(req, res) {
     res.writeHead(200, {
@@ -95,17 +142,50 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
     });
   }
 
-  async function handleDemo(res) {
-    let input;
+  // POST /api/task {title, input, mode: "simple"|"ai", config?} -> 202 {taskId}.
+  // config is an optional per-task partial {engine, model, mode, speed,
+  // subagents:{model,count,types}} merged over the global settings.
+  async function handleCreateTask(req, res) {
+    let body;
     try {
-      input = await readFile(DEMO_FILE, 'utf8');
+      body = JSON.parse((await readBody(req)) || '{}');
     } catch {
-      sendJson(res, 500, { error: 'Не найден файл demo/demo-task.txt' });
+      sendJson(res, 400, { error: 'Некорректный JSON' });
       return;
     }
-    // Fire and forget: the dashboard watches progress via /events.
-    demoFarm.runTask({ title: 'Демо: список клиентов', input }).catch(() => {});
-    sendJson(res, 200, { taskId: 'started' });
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    if (!title) {
+      sendJson(res, 400, { error: 'Название задачи не может быть пустым' });
+      return;
+    }
+    const mode = body.mode === 'ai' ? 'ai' : 'simple';
+    if (body.mode !== undefined && body.mode !== 'simple' && body.mode !== 'ai') {
+      sendJson(res, 400, { error: 'Режим должен быть "simple" или "ai"' });
+      return;
+    }
+    const input = typeof body.input === 'string' ? body.input : '';
+    const taskConfig = body.config && typeof body.config === 'object' && !Array.isArray(body.config)
+      ? body.config
+      : undefined;
+    const task = store.createTask({ title, input, mode, config: taskConfig });
+    sendJson(res, 202, { taskId: task.id });
+  }
+
+  // PUT /api/settings: strict validation, 400 with Russian errors on garbage.
+  async function handleUpdateSettings(req, res) {
+    let patch;
+    try {
+      patch = JSON.parse((await readBody(req)) || '{}');
+    } catch {
+      sendJson(res, 400, { error: 'Некорректный JSON' });
+      return;
+    }
+    const result = settings.update(patch);
+    if (!result.ok) {
+      sendJson(res, 400, { error: 'Некорректные настройки', details: result.errors });
+      return;
+    }
+    sendJson(res, 200, result.settings);
   }
 
   // External orchestrators (the Main Agent — Claude) push their pipeline
@@ -175,12 +255,29 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
       if (req.method === 'GET' && pathname === '/api/state') {
         sendJson(res, 200, {
           zones: config.zones ?? [],
+          claudeExecutor,
+          codexExecutor,
+          engine: settings.get().engine,
+          claudeModels: config.claudeModels ?? [],
+          codexModels: config.codexModels ?? [],
           history: bus.history().slice(-100),
         });
         return;
       }
-      if (req.method === 'POST' && pathname === '/api/demo') {
-        await handleDemo(res);
+      if (req.method === 'GET' && pathname === '/api/tasks') {
+        sendJson(res, 200, { tasks: store.list() });
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/api/settings') {
+        sendJson(res, 200, settings.get());
+        return;
+      }
+      if (req.method === 'PUT' && pathname === '/api/settings') {
+        await handleUpdateSettings(req, res);
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/api/task') {
+        await handleCreateTask(req, res);
         return;
       }
       if (req.method === 'POST' && pathname === '/api/event') {

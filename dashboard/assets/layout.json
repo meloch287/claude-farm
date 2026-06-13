@@ -17,20 +17,21 @@
     "archiver": { "x": 790, "y": 420 },
     "signoff": { "x": 910, "y": 420 }
   },
+  "helpers": { "x": 600, "spacing": 28 },
   "zones": {
     "kitchen": {
       "door": { "x": 145 },
-      "driver": { "id": "scraper", "seat": { "x": 242 }, "desk": { "x": 212 } },
-      "tester": { "id": "cleaner", "seat": { "x": 314 }, "desk": { "x": 284 } }
+      "driver": { "id": "scraper", "seat": { "x": 242 }, "desk": { "x": 216 } },
+      "tester": { "id": "cleaner", "seat": { "x": 314 }, "desk": { "x": 292 } }
     },
     "corridor": {
-      "door": { "x": 380 },
-      "driver": { "id": "editor", "seat": { "x": 402 }, "desk": { "x": 372 } },
-      "tester": { "id": "validator", "seat": { "x": 494 }, "desk": { "x": 464 } }
+      "door": { "x": 345 },
+      "driver": { "id": "editor", "seat": { "x": 402 }, "desk": { "x": 376 } },
+      "tester": { "id": "validator", "seat": { "x": 494 }, "desk": { "x": 472 } }
     },
     "living": {
       "door": { "x": 545 },
-      "driver": { "id": "runner", "seat": { "x": 602 }, "desk": { "x": 572 } },
+      "driver": { "id": "runner", "seat": { "x": 602 }, "desk": { "x": 576 } },
       "tester": { "id": "sniffer", "seat": { "x": 676 }, "desk": { "x": 646 } }
     },
     "bath": {

@@ -6,10 +6,19 @@
 
    Fonts (Cyrillic subsets verified via fonts.googleapis.com/css2
    unicode-range: U+0400-045F present for all three):
-     "Press Start 2P"  — headings only, >=16px / 1.6 / .02em
-     "Pixelify Sans"   — pixel body font WITH Cyrillic, >=20px / 1.5 / .03em
+     "Press Start 2P"  — headings only / 1.6 / .02em
+     "Pixelify Sans"   — pixel body font WITH Cyrillic / 1.5 / .03em
      "PT Mono"         — loaded fallback (Cyrillic confirmed)
    VT323 has NO Cyrillic — not used.
+
+   60% DENSITY (boss order): html { font-size: 60% } => 1rem = 9.6px.
+   Legibility floors at COMPUTED size (every font-size below audited):
+     body / inputs            >= 12px   (1.25rem = 12px)
+     Press Start 2P + buttons >= 14px   (1.5rem  = 14.4px)
+     badges / signs           >= 11px   (1.2rem  = 11.52px)
+   Structural maxima moved to px so the page keeps its full footprint:
+     main/header 1200px, farmhouse 1040px, status 1168px.
+   Media queries are immune to html font-size (rem in MQ = 16px).
 
    Contrast (darkened state set, verified vs cream #fff6dd / parchment #f6e7c1):
      #3a2417 ink        ~13.6:1 / ~11.9:1  (body text)
@@ -20,6 +29,10 @@
      #a8431f error       ~5.6:1 /  ~4.9:1
      #3a6e1f done        ~5.6:1 /  ~5.0:1
      #3a2417 on #e3a93a gold badge bg ~7.0:1
+     #3a2417 on #c98e4f room-sign plank ~5.0:1
+     #3a2417 on #f1dfae board card     ~11.0:1
+     #5c4330 on #f1dfae board card      ~6.9:1
+     #a8431f on #f1dfae board card      ~4.6:1 (fail badge, bold + glyph)
    Gold #e3a93a NEVER as text / border / focus.
    Bright accents (terracotta/leaf/gold/sky) = large decorative fills only.
    ============================================================ */
@@ -33,7 +46,7 @@
   --bg: #f6e7c1;            /* warm parchment page */
   --surface: #fff6dd;       /* cream panel */
   --surface-2: #fdf0cd;     /* cream, slightly toasted (active rooms) */
-  --parchment-deep: #f1dfae;/* feed parchment */
+  --parchment-deep: #f1dfae;/* deep parchment (board task cards) */
 
   /* ink */
   --ink: #3a2417;           /* chocolate text */
@@ -70,10 +83,20 @@
 
 html {
   background: var(--bg);
+  /* 80% density (boss order): the whole rem grid compresses to 0.8x;
+     1rem = 12.8px. Every floor is cleared with margin
+     (body 1.25rem = 16px, PS2P h2 1.5rem = 19.2px) */
+  font-size: 80%;
 }
 
 body {
   margin: 0;
+  /* page-level air: content never touches the viewport edges; generous
+     bottom padding so the page never ends flush against the last panel.
+     overflow-x: clip absorbs the scrollbar-width sliver of the 100vw
+     full-bleed board breakout (no stray horizontal scrollbar). */
+  padding: 0 1.5rem 3rem;
+  overflow-x: clip;
   min-height: 100vh;
   color: var(--ink);
   background-color: var(--bg);
@@ -86,15 +109,15 @@ body {
     transparent 6px
   );
   font-family: var(--font-stack);
-  font-size: 1.25rem;        /* >= 20px for the pixel body font */
-  line-height: 1.5;
+  font-size: 1.25rem;        /* computed 12px — body floor */
+  line-height: 1.6;          /* loosened: air comes from spacing, not smaller text */
   letter-spacing: 0.03em;
 }
 
 main {
-  max-width: 75rem;
+  max-width: 1200px;         /* px: full footprint survives the 60% rem grid */
   margin: 0 auto;
-  padding: 0 1rem 2rem;
+  padding: 0 0 2rem;         /* horizontal air now lives on body */
 }
 
 /* Headings: Press Start 2P (Cyrillic verified), >=16px, never paragraphs */
@@ -106,7 +129,7 @@ h1, h2, h3 {
 }
 
 h1 {
-  font-size: 1.375rem;       /* 22px */
+  font-size: 1.75rem;        /* computed 16.8px — above the 14px PS2P floor */
   color: var(--ink);
   /* decorative warm pixel shadow; text itself stays full-contrast ink */
   text-shadow: 0.125rem 0.125rem 0 rgba(201, 142, 79, 0.55);
@@ -114,12 +137,12 @@ h1 {
 }
 
 h2 {
-  font-size: 1rem;           /* 16px minimum respected */
+  font-size: 1.5rem;         /* computed 14.4px — PS2P floor respected */
   margin: 0 0 0.5rem;
 }
 
 h3 {
-  font-size: 1rem;
+  font-size: 1.5rem;         /* computed 14.4px */
 }
 
 a {
@@ -148,13 +171,22 @@ a:hover {
   outline-offset: 2px;
 }
 
+/* Keyboard-only indicator: pointer clicks (incl. tabindex="-1" targets like
+   <main>) must not paint a frame around whole sections. Browsers without
+   :focus-visible support ignore this rule and keep the always-on outline. */
 :focus:not(:focus-visible) {
-  outline: 2px solid var(--ink); /* keep visible even without :focus-visible support */
+  outline: none;
 }
 
 :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+/* Programmatic focus targets (skip-link destination) never need a frame. */
+main:focus,
+[tabindex="-1"]:focus {
+  outline: none;
 }
 
 /* ---------- Skip link (first focusable) ---------- */
@@ -200,7 +232,10 @@ a:hover {
 
 .farmhouse,
 section[data-zone],
-.feed-log,
+.board-col,
+.epic,
+#task-form,
+dialog,
 header.site-header,
 .site-header {
   background: var(--surface);
@@ -215,9 +250,9 @@ header.site-header,
 /* ---------- Header: warm cream sign-board, clothesline, controls ---------- */
 
 header {
-  max-width: 75rem;
-  margin: 1rem auto 0;
-  padding: 0.75rem 1.25rem;
+  max-width: 1200px;         /* matches main: symmetric gutters on both views */
+  margin: 1.5rem auto 0;
+  padding: 1.25rem 1.75rem;
 }
 
 .tagline {
@@ -231,26 +266,15 @@ header .toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
   margin-top: 0.75rem;
 }
 
-/* keep standalone sections on the same 75rem column as header/main */
-.feed-panel {
-  max-width: 75rem;
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-
-/* the controls live inside the header sign-board (one card, tight rhythm) */
+/* the controls live inside the header sign-board; generous margin below
+   the bar gives the sign-board breathing room before the views start */
 .controls {
-  margin-top: 0.625rem;
-}
-
-.feed-panel {
-  padding-bottom: 2rem;
+  margin-top: 1.25rem;
+  margin-bottom: 2rem;
 }
 
 /* ---------- Clothesline (#stages): rustic rope + wooden pegs ---------- */
@@ -260,8 +284,8 @@ header .toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1.5rem;
-  margin: 0.625rem 0 0;
-  padding: 0.5rem 0 0;
+  margin: 1.25rem 0 1rem;    /* the clothesline hangs with air above and below */
+  padding: 0.75rem 0 0;
   border-top: 0.1875rem dashed var(--wood); /* the rope */
 }
 
@@ -315,14 +339,63 @@ header .toolbar {
   background: var(--state-done);
 }
 
-/* ---------- House map (#map): zone grid ---------- */
+/* ---------- House map (#map): view sections ---------- */
 
 #map {
   position: relative; /* anchor for the travelling #token */
+  margin-top: 2.5rem; /* vertical rhythm: clear gap between header and views */
+}
+
+/* ---------- Views «Ферма» / «Доска» ----------
+   app.js toggles the [hidden] attribute on the inactive section;
+   guard it explicitly so no display value can ever defeat it. */
+
+#farm-view[hidden],
+#board-view[hidden] {
+  display: none !important;
+}
+
+/* the farm view keeps the old zone grid that used to live on #map */
+#farm-view:not([hidden]) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-  gap: 1.25rem;
-  margin-top: 1rem;
+  gap: 1.75rem;
+}
+
+/* the farm never looks cut off: a deep bottom shelf under the last row
+   (6rem = 57.6px computed — keeps the old visual depth at 60% density) */
+#farm-view {
+  padding-bottom: 6rem;
+}
+
+/* the zone-card row keeps clear ground under itself */
+#farm-view section[data-zone]:last-of-type {
+  margin-bottom: 2rem;
+}
+
+#farm-view > h2 {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* ---------- Board view: full-bleed work surface ----------
+   Breaks out of the centered column to the full viewport width.
+   CENTERING FIX (boss: «content shifted right»): the old one-sided
+   margin-left: calc(50% - 50vw) anchored the panel to the 100vw center,
+   which includes the scrollbar — everything sat half-a-scrollbar to the
+   right of the centered main column. Symmetric negative margins keep the
+   breakout centered on the SAME axis as main; the half-scrollbar sliver
+   now overhangs equally on both sides and body overflow-x: clip absorbs
+   it inside the clamp() padding. Gutters stay symmetric. */
+#board-view:not([hidden]) {
+  width: auto;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding: 2rem clamp(1.25rem, 3vw, 3.5rem) 3rem;
+}
+
+#board-view > h2 {
+  margin: 0 0 1.5rem;
 }
 
 /* ---------- Wide screens: controls share the title line ----------
@@ -341,10 +414,8 @@ header .toolbar {
       "stages  stages";
     grid-template-columns: max-content minmax(0, 1fr);
     column-gap: 1.5rem;
+    row-gap: 0.75rem;
     align-items: center;
-    /* the sign-board widens to match the 90rem farmhouse panel below,
-       making room for title + controls on one line */
-    max-width: min(90rem, 100vw - 2rem);
   }
 
   .site-header h1 {
@@ -364,7 +435,7 @@ header .toolbar {
   .site-header .controls {
     grid-area: controls;
     justify-content: flex-end;
-    margin-top: 0;
+    margin: 0;               /* the grid row-gap carries the rhythm here */
   }
 }
 
@@ -373,7 +444,7 @@ section[data-zone] {
   --state-color: var(--state-idle);
   position: relative;
   min-height: 11rem;          /* min-height only: survives 1.4.12 text-spacing */
-  padding: 1rem;
+  padding: 1.25rem;           /* +25% inner air */
   border-color: var(--state-color);
   image-rendering: pixelated;
 }
@@ -396,7 +467,7 @@ section[data-zone] h2 {
 
 /* Reserve two heading lines whenever zone cards sit side by side, so the
    state badges and crew rows stay aligned across the row even when one
-   title («Коридор — Обработка») wraps and its neighbours do not.
+   title («Амбар — Обработка») wraps and its neighbours do not.
    min-height (not height): text can still grow at 200% zoom / 1.4.12. */
 @media (min-width: 37rem) {
   section[data-zone] h2 {
@@ -409,7 +480,7 @@ section[data-zone] .agent,
 section[data-zone] .agents li,
 section[data-zone] p {
   color: var(--ink-dim);
-  margin: 0.25rem 0;
+  margin: 0.375rem 0;
 }
 
 section[data-zone] .agents {
@@ -452,8 +523,8 @@ section[data-zone] .glyph {
 .crew {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-  gap: 0.75rem;
-  margin-top: 0.75rem;
+  gap: 1.5rem;
+  margin-top: 1rem;
 }
 
 .crew .card {
@@ -461,9 +532,9 @@ section[data-zone] .glyph {
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: auto auto;
   column-gap: 0.75rem;
-  row-gap: 0.25rem;
+  row-gap: 0.375rem;
   align-content: center;
-  padding: 0.625rem 0.75rem;
+  padding: 0.875rem 1rem;    /* +25% inner air */
   border: 0.1875rem solid var(--wood);
   border-radius: 0.5rem;
   background: var(--bg);     /* parchment plaque on cream room */
@@ -496,7 +567,7 @@ section[data-zone] .glyph {
   justify-self: start;
   margin: 0;
   padding: 0.125rem 0.5rem;
-  font-size: 1.25rem;          /* body font stays >= 20px */
+  font-size: 1.25rem;          /* computed 12px — body floor */
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -660,17 +731,19 @@ section[data-zone][data-state="error"] {
 
 /* ---------- Farmhouse map: dollhouse cutaway panel ---------- */
 
-/* Hero panel: spans the full #map grid and breaks out of the 75rem
-   column up to 90rem (centered, always >= 1rem viewport margin), so
-   the dollhouse dominates the page. aspect-ratio stays locked to the
-   960x540 scene so the %-based actor coordinates always line up. */
+/* Hero panel: spans the full #map grid row but no longer wall-to-wall —
+   capped at 65rem and centered, so the parchment page background stays
+   visible around it. aspect-ratio stays locked to the 960x540 scene so
+   the %-based actor coordinates always line up (the <img> shares the
+   exact same ratio: nothing of the grass/fence band can be clipped). */
 .farmhouse {
   position: relative;
   grid-column: 1 / -1;
   justify-self: center;
-  width: min(90rem, 100vw - 2rem);
+  width: 100%;
+  max-width: 1040px;        /* px: the map stays the hero at 60% density */
   aspect-ratio: 960 / 540;
-  margin-top: 0;
+  margin: 2rem auto 3rem;
   overflow: hidden;
   background: var(--surface);
 }
@@ -699,8 +772,10 @@ section[data-zone][data-state="error"] {
 
 /* villagers scale with the map: 16px-wide art at the 3x scene scale
    (48 of 960 scene px, ~105px tall at a 1440px viewport) so the cast
-   reads as the heroes of the dollhouse */
-.farmhouse .worker {
+   reads as the heroes of the dollhouse; .helper = subagent sprites,
+   same pixelated treatment as the resident .worker cast */
+.farmhouse .worker,
+.farmhouse .helper {
   width: 5%;
   height: auto;
 }
@@ -781,9 +856,11 @@ section[data-zone][data-state="error"] {
 /* ---- Idle bob for the 8 workers: <=4px amplitude, >=1.5s period ---- */
 
 .villager,
-.worker {
+.worker,
+.helper {
   position: absolute;
   pointer-events: none;
+  image-rendering: pixelated;
 }
 
 .idle-bob,
@@ -897,6 +974,7 @@ section[data-zone][data-state="error"] {
 
 button {
   font: inherit;
+  font-size: 1.5rem;              /* computed 14.4px — button floor 14px */
   font-weight: 700;
   letter-spacing: 0.04em;
   cursor: pointer;
@@ -970,6 +1048,45 @@ button[aria-disabled="true"] {
   background: currentColor;     /* ON = filled: shape change, not color-only */
 }
 
+/* ---------- View switcher «Ферма» / «Доска» ----------
+   The pressed view is marked beyond color: pushed-in inset shadow,
+   thick underline mark and a filled notch (hollow when inactive). */
+
+#view-farm-btn,
+#view-board-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+#view-farm-btn::before,
+#view-board-btn::before {
+  content: "";
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: transparent;      /* inactive view = hollow ring */
+}
+
+#view-farm-btn[aria-pressed="true"],
+#view-board-btn[aria-pressed="true"] {
+  background: var(--surface-2);
+  text-decoration: underline;
+  text-decoration-thickness: 0.1875rem;
+  text-underline-offset: 0.3em;
+  transform: translate(0.125rem, 0.125rem); /* sits pressed into the bar */
+  box-shadow:
+    inset 0 0 0 2px var(--wood-hi),
+    inset 0.1875rem 0.1875rem 0 rgba(84, 51, 26, 0.35);
+}
+
+#view-farm-btn[aria-pressed="true"]::before,
+#view-board-btn[aria-pressed="true"]::before {
+  background: currentColor;     /* active view = filled dot */
+}
+
 label,
 label[for] {
   color: var(--ink);
@@ -1001,8 +1118,8 @@ select:disabled,
 
 #status {
   min-height: 2.25rem;            /* reserve space, avoid layout shift */
-  max-width: 73rem;
-  margin: 1rem auto;
+  max-width: 1168px;              /* px: slightly inset from the 1200px column */
+  margin: 1.5rem auto;
   padding: 0.4rem 0.75rem;
   color: var(--state-done);
   background: var(--surface-2);
@@ -1011,71 +1128,562 @@ select:disabled,
 }
 
 /* idle (empty) status: fully invisible — no stray bare chip floating
-   between the crew cards and the feed; min-height above still reserves
-   the space, so layout and the role="status" region are untouched */
+   under the view sections; min-height above still reserves the space,
+   so layout and the role="status" region are untouched */
 #status:empty {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
 }
 
-/* ---------- Event feed (role="log") ---------- */
+/* ---------- Room signs: wooden planks over each room top ----------
+   left/top % come from assets/layout.json anchors (inlined in HTML:
+   cabinet 7.29 / kitchen 25.52 / corridor 46.35 / living 67.19 /
+   bath 89.06 of the 960 viewBox); here: centering, plank look, size.
+   #3a2417 text on #c98e4f plank = 5.0:1. Decorative (aria-hidden
+   farmhouse); sign floor 11px => clamp floor 1.15rem = 11.04px. */
 
-[role="log"],
-.feed-wrap {
-  margin-top: 1.5rem;
+.room-sign {
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 4;                  /* above the scene, under actors/paper */
+  padding: 0.1em 0.45em 0.15em;
+  white-space: nowrap;
+  pointer-events: none;
+  font-family: var(--font-stack);
+  font-weight: 700;
+  font-size: clamp(1.15rem, 0.35rem + 1.1vw, 1.5rem);
+  line-height: 1.25;
+  letter-spacing: 0.03em;
+  color: var(--ink);           /* #3a2417 */
+  background: var(--wood-hi);  /* #c98e4f plank */
+  border: 2px solid var(--wood-dark); /* #54331a */
+  border-radius: 0.25rem;
+  box-shadow: 0 0.125rem 0 rgba(84, 51, 26, 0.45);
 }
 
-/* the role="log" wrapper is the scroll container (tabindex="0" in HTML,
-   so keyboard users can scroll the history) */
-.feed-log {
-  max-height: 22rem;
-  overflow-y: auto;
-  background: var(--parchment-deep);
-  scrollbar-color: var(--wood) var(--parchment-deep);
+/* at <=480px neighbouring planks would collide — hide them gracefully */
+@media (max-width: 30rem) {
+  .room-sign {
+    display: none;
+  }
 }
 
-#feed {
+/* ---------- Task form (board view) ---------- */
+
+/* sits full-width above the columns inside the full-bleed board view */
+#task-form {
+  display: grid;
+  gap: 1rem;
+  margin: 0 0 2rem;
+  padding: 1.5rem 1.75rem;
+}
+
+#task-form .form-field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+#task-form label {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* text/number fields only: the ID selector outweighs .choice input, so
+   radios/checkboxes (24px squares inside labels) must be excluded here */
+#task-form input:not([type="radio"]):not([type="checkbox"]),
+#task-form textarea {
+  font: inherit;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+}
+
+#task-form textarea {
+  resize: vertical;
+}
+
+#task-form input:not([type="radio"]):not([type="checkbox"]):hover,
+#task-form textarea:hover {
+  border-color: var(--wood-dark);
+}
+
+/* invalid field: thick error border under the inline message */
+#task-form [aria-invalid="true"] {
+  border-color: var(--state-error);
+  box-shadow: inset 0 0 0 1px var(--state-error);
+}
+
+/* inline error: #a8431f bold text; the ✗ glyph arrives as text from
+   app.js, so the meaning never rides on color alone */
+.field-error,
+#err-title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--state-error);   /* ~5.6:1 on cream */
+}
+
+#task-form .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* «Создать задачу ИИ»: gold primary — same recipe as #btn-demo
+   (gold BACKGROUND + #3a2417 text ~7:1, allowed use) */
+#task-form button[value="ai"] {
+  color: var(--ink);
+  background: var(--gold);
+  border-color: var(--wood-dark);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 246, 221, 0.55),
+    0.25rem 0.25rem 0 rgba(84, 51, 26, 0.35);
+}
+
+#task-form button[value="ai"]:hover {
+  background: #eab94f;
+}
+
+/* the id-scoped gold rule above outweighs the global aria-disabled
+   pattern — restate the muted look at higher specificity */
+#task-form button[value="ai"][aria-disabled="true"] {
+  color: var(--ink-dim);
+  background: #ece0c2;
+  border-color: var(--wood);
+  box-shadow: none;
+}
+
+/* ---------- Epic banners (AI parents being split) ---------- */
+
+.epics,
+.epic-strip {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+}
+
+.epics:empty {
+  display: none;
+  margin: 0;
+}
+
+/* app.js toggles the [hidden] attribute on its .epic-strip — guard it
+   against the display: grid above */
+.epic-strip[hidden] {
+  display: none !important;
+}
+
+.epic {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 1rem 1.25rem;
+}
+
+.epic .epic-title,
+.epic strong,
+.epic b {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* warm plank-brown fill (>= 3:1 on cream); the «3/7 готово» text
+   beside it carries the value, so the bar never stands alone */
+.epic progress {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+  height: 1.125rem;
+  accent-color: var(--wood);
+}
+
+.epic .epic-count,
+.epic output {
+  font-weight: 700;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+/* ---------- Kanban board: 6 wooden columns ---------- */
+
+/* #board-view is already full-bleed, so the column row just stretches
+   edge to edge inside it; on narrow screens the row scrolls
+   horizontally — natural overflow, nothing trapped, no tabindex */
+.board {
+  position: relative;
+  width: 100%;
+  min-height: 70vh;          /* a full work surface, not a thin strip */
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  /* room for the frames' outer ring + drop shadow inside the scroll box */
+  padding: 0.25rem 0.25rem 0.625rem;
+  scrollbar-color: var(--wood) var(--bg);
+}
+
+.board-col {
+  flex: 1 1 0;
+  min-width: 20rem;            /* 192px computed: six columns fit a 1280px+ screen */
+  padding: 1rem;
+}
+
+.board-col h3 {
+  margin: 0 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--wood);
+  color: var(--ink);
+  /* farm titles («Амбар — Обработка») may wrap to a second line; the
+     count is glued to the last word with &nbsp; in the markup so it can
+     never orphan. min-height reserves two lines: lists across columns
+     stay aligned whether or not a title wraps (min-height, not height —
+     text still grows at 200% zoom / 1.4.12 overrides). */
+  min-height: calc(3.2em + 0.4rem + 2px);
+}
+
+/* live count in the column heading, body font */
+.col-count {
+  font-family: var(--font-stack);
+  font-size: 1.25rem;          /* computed 12px — body floor */
+  font-weight: 700;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.board-col ul {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  gap: 1rem;
+  min-height: 3rem;
+  align-content: start;
 }
 
-#feed li {
-  padding: 0.4rem 0.75rem;
-  border-bottom: 1px solid rgba(138, 90, 43, 0.35);
-  border-left: 0.375rem solid var(--wood);
+/* task cards: small parchment notes pinned to the column */
+.board-col li {
+  position: relative;
+  margin-top: 0.375rem;        /* leaves room for the pin head */
+  padding: 0.75rem 0.875rem 0.625rem;
   color: var(--ink);
+  background: var(--parchment-deep);
+  border: 2px solid var(--wood);
+  border-radius: 0.375rem;
+  box-shadow: 0 0.1875rem 0 rgba(84, 51, 26, 0.18);
   overflow-wrap: anywhere;
 }
 
-#feed li:last-child {
-  border-bottom: none;
+/* the pin (decorative) */
+.board-col li::before {
+  content: "";
+  position: absolute;
+  top: -0.4375rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 2px solid var(--wood-dark);
+  border-radius: 50%;
+  background: var(--terracotta); /* decorative fill */
 }
 
-#feed .ts,
-#feed time,
-#feed small {
+.board-col li .task-title,
+.board-col li strong,
+.board-col li b {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* meta lines: «Попытки: N» + truncated last message */
+.board-col li small,
+.board-col li .attempts,
+.board-col li .card-attempts,
+.board-col li .last-msg,
+.board-col li .card-msg {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.25rem;          /* computed 12px — body floor */
+  color: var(--ink-dim);       /* ~6.9:1 on the note parchment */
+}
+
+/* «ИИ» source badge: gold BACKGROUND + ink text (~7:1) — allowed use */
+.badge-ai {
+  display: inline-block;
+  margin-left: 0.375rem;
+  padding: 0 0.4em 0.05em;
+  font-size: 1.2rem;           /* computed 11.52px — badge floor 11px */
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--gold);
+  border: 1px solid var(--wood-dark);
+  border-radius: 0.25rem;
+  white-space: nowrap;
+}
+
+/* ---------- Config chips on task cards (DOM: title -> badges -> status) ----------
+   Non-interactive <span> chips rendered by app.js after the card title:
+   .badge-model («Клауд 4.8» / «Соннет 4.6» / «Хайку 4.5» / «GPT-5.5») and
+   .badge-mode («Ультракод» / «Обычный» / «Фастер»). Full-text labels,
+   darkened state-color set only (>= 4.5:1 on the #f1dfae note parchment;
+   the cream chip background raises it further), 1px border, floor 11px. */
+
+.card-badge {
+  display: inline-block;
+  margin-left: 0.375rem;
+  padding: 0 0.4em 0.05em;
+  font-size: 1.2rem;           /* computed 11.52px — badge floor 11px */
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--surface);  /* cream chip pinned on the parchment note */
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  white-space: nowrap;
+}
+
+.badge-model {
+  color: var(--state-testing); /* #1f6a8c: ~5.5:1 on cream, ~4.9:1 on parchment */
+}
+
+.badge-mode {
+  color: var(--state-working); /* #7a5a10: ~5.9:1 on cream, ~5.2:1 on parchment */
+}
+
+/* «Сбой» badge: state-error text + ✗ glyph from JS (never color alone);
+   #a8431f >= 4.5:1 on both cream and the note parchment */
+.badge-fail,
+.badge-error,
+.card-fail,
+.board-col li .fail {
+  display: inline-block;
+  margin-left: 0.375rem;
+  font-weight: 700;
+  color: var(--state-error);
+  white-space: nowrap;
+}
+
+/* ---------- Settings gear button ---------- */
+
+#btn-settings .gear-icon {
+  display: block;
+  width: 1.8rem;               /* ~17px icon inside the 2.75rem-tall button */
+  height: 1.8rem;
+}
+
+/* ---------- Dialogs: onboarding + settings ----------
+   Wooden Stardew frame + cream panel come from the shared frame recipe
+   above (dialog is in the selector list). No open/close animation is
+   added — nothing new for the reduced-motion / pause gates to cover. */
+
+dialog {
+  width: min(700px, calc(100vw - 4rem));
+  max-height: calc(100vh - 6rem);
+  overflow: auto;
+  padding: 1.75rem 2rem;
+  color: var(--ink);
+}
+
+dialog::backdrop {
+  /* dark translucent wood-shadow; literal color (vars don't reach
+     ::backdrop in older engines) */
+  background: rgba(43, 26, 13, 0.6);
+}
+
+dialog h2 {
+  margin: 0 0 1.25rem;
+}
+
+#settings-form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+/* onboarding: two big engine choices, each described by its own <p> */
+.onboarding-choices {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+}
+
+.onboarding-choice {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+}
+
+.onboarding-choice button {
+  width: 100%;
+}
+
+.onboarding-choice p {
+  margin: 0;
   color: var(--ink-dim);
-  font-size: 1.125rem;
-  margin-right: 0.5rem;
 }
 
-/* event-type accents via left border, darkened set only
-   (color + the message text itself, never color alone) */
-#feed li[data-type^="driver"]       { border-left-color: var(--state-working); }
-#feed li[data-type^="tester"]       { border-left-color: var(--state-testing); }
-#feed li[data-type="tester.ok"]     { border-left-color: var(--state-done); }
-#feed li[data-type="tester.bounce"] { border-left-color: var(--state-error); }
-#feed li[data-type="task.done"]     { border-left-color: var(--state-done); color: var(--state-done); }
-#feed li[data-type="task.failed"]   { border-left-color: var(--state-error); color: var(--state-error); }
-#feed li[data-type="error"]         { border-left-color: var(--state-error); }
-#feed li[data-type="sound"]         { border-left-color: var(--state-idle); color: var(--ink-dim); }
+/* ---------- Fieldsets: cream inset groups (dialogs + task config) ---------- */
+
+dialog fieldset,
+#task-config fieldset {
+  margin: 0;
+  padding: 1rem 1.25rem 1.25rem;
+  background: var(--surface-2);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+  box-shadow: inset 0 0 0 1px rgba(201, 142, 79, 0.5);
+}
+
+dialog legend,
+#task-config legend {
+  padding: 0.05em 0.6em 0.1em;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--wood);
+  border-radius: 0.25rem;
+}
+
+/* the inactive engine fieldset carries the hidden ATTRIBUTE; guard it the
+   same way the views are guarded so no display rule can ever defeat it */
+dialog [hidden],
+#task-config [hidden] {
+  display: none !important;
+}
+
+/* nested «Типы субагентов» group sits inside the Клауд fieldset */
+.subtype-picker {
+  margin-top: 1rem !important;
+}
+
+/* radio/checkbox rows */
+.engine-picker,
+.subtype-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.engine-picker legend,
+.subtype-picker legend {
+  margin-bottom: 0.25rem;
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* native radios/checkboxes: 24px computed targets (WCAG 2.5.8), wood accent */
+.choice input[type="radio"],
+.choice input[type="checkbox"] {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: 0;
+  flex: none;
+  accent-color: var(--wood);
+}
+
+/* engine-specific field grids inside the fieldsets */
+.config-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.config-fields {
+  display: grid;
+  gap: 0.75rem 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+}
+
+/* text/number inputs in dialogs reuse the task-form recipe */
+dialog input:not([type="radio"]):not([type="checkbox"]),
+#task-config input:not([type="radio"]):not([type="checkbox"]) {
+  font: inherit;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+}
+
+dialog select,
+#task-config select {
+  width: 100%;
+}
+
+/* ---------- Per-task config: <details> disclosure in the task form ---------- */
+
+#task-config {
+  padding: 0.5rem 1rem;
+  background: var(--surface-2);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+  box-shadow: inset 0 0 0 1px rgba(201, 142, 79, 0.5);
+}
+
+#task-config[open] {
+  padding-bottom: 1.25rem;
+}
+
+#task-config summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+  list-style: none;            /* custom wood chevron below */
+  font-size: 1.5rem;           /* computed 14.4px — interactive control floor */
+  font-weight: 700;
+  color: var(--ink);
+  border-radius: 0.375rem;     /* the focus-visible outline hugs a clean shape */
+}
+
+#task-config summary::-webkit-details-marker {
+  display: none;
+}
+
+/* wood chevron: closed = points right, open = points down (no transition —
+   instant flip, nothing for the motion gates to cover) */
+#task-config summary::before {
+  content: "";
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 0.7rem solid var(--wood-dark);
+  border-top: 0.5rem solid transparent;
+  border-bottom: 0.5rem solid transparent;
+}
+
+#task-config[open] summary::before {
+  border-left: 0.5rem solid transparent;
+  border-right: 0.5rem solid transparent;
+  border-top: 0.7rem solid var(--wood-dark);
+  border-bottom: 0;
+}
+
+#task-config[open] summary {
+  margin-bottom: 1rem;
+}
 
 /* ---------- Footer ---------- */
 
 footer {
-  max-width: 75rem;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 1rem;
   color: var(--ink-dim);
@@ -1086,15 +1694,19 @@ footer {
 
 @media (max-width: 30rem) {
   header {
-    padding: 0.75rem 0.75rem 0.5rem;
+    padding: 1rem 1rem 0.75rem;
   }
 
   main {
-    padding: 0 0.75rem 1.5rem;
+    padding: 0 0 1.5rem;     /* body keeps the >=1.5rem side air at 320px */
   }
 
-  #map {
+  #farm-view:not([hidden]) {
     grid-template-columns: 1fr;
+  }
+
+  .board {
+    gap: 0.75rem;            /* columns keep min-width 13rem and scroll */
   }
 
   #stages {
@@ -1172,8 +1784,23 @@ footer {
 
 @media (forced-colors: active) {
   section[data-zone],
-  #feed,
   .farmhouse,
+  .board-col,
+  .board-col li,
+  .epic,
+  .room-sign,
+  #task-form input,
+  #task-form textarea,
+  dialog,
+  dialog fieldset,
+  dialog legend,
+  dialog input,
+  #task-config,
+  #task-config fieldset,
+  #task-config legend,
+  #task-config input,
+  .card-badge,
+  .badge-ai,
   button,
   select {
     border-color: CanvasText;

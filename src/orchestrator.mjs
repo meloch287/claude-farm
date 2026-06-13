@@ -8,7 +8,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * @param {{zones: Array<{id: string, title: string, driver: {id: string, name: string}, tester: {id: string, name: string}}>, maxAttempts: number, stepDelayMs?: number}} config
  * @param {{runDriver(zoneId: string, ctx: object): Promise<any>, runTester(zoneId: string, ctx: object): Promise<{ok: boolean, note?: string, reason?: string, bounceTo?: string}>}} runners
  * @param {{emit(partialEvent: object): object}} bus
- * @returns {{runTask({title, input}: {title: string, input: string}): Promise<{ok: boolean, task: object, data: object}>}}
+ * @returns {{runTask({id, title, input, config}: {id?: string, title: string, input: string, config?: object}): Promise<{ok: boolean, task: object, data: object}>}}
  */
 export function createFarm(config, runners, bus) {
   let taskCounter = 0;
@@ -20,10 +20,15 @@ export function createFarm(config, runners, bus) {
     }
   }
 
-  async function runTask({ title, input }) {
-    const taskId = 't' + ++taskCounter;
+  async function runTask(spec) {
+    const { title, input } = spec;
+    // Honor an external id (the task store passes its own) so farm events
+    // carry the store id; otherwise keep the internal counter.
+    const taskId = spec.id ?? 't' + ++taskCounter;
     const ctx = {
-      task: { id: taskId, title, input, attempts: 1 },
+      // task.config: per-task effective config (engine, model, mode/speed,
+      // subagents) — runners read it to pick models and the ultracode plan.
+      task: { id: taskId, title, input, attempts: 1, config: spec.config },
       data: {},
       config,
     };

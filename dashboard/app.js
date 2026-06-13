@@ -2,15 +2,22 @@
  * Клауд Ферма — dashboard client (vanilla JS, no deps).
  *
  * Responsibilities:
- *  - EventSource("/events") with reconnect notes in the log and seq-based dedupe
+ *  - EventSource("/events") with reconnect notes and seq-based dedupe
  *  - state machine: event type -> zone data-state + token position + clothespin aria-current
  *  - coalesced role="status" announcer (queue, min 2s between flushes, assertive only on failure)
- *  - feed appender (append <li> only, cap 200 nodes, never re-render)
+ *  - view switcher «Ферма»/«Доска»: aria-pressed buttons toggle the hidden
+ *    attribute on #farm-view/#board-view, choice persisted (localStorage "farm.view")
+ *  - kanban board: renders GET /api/tasks into 6 columns + epic strip,
+ *    refetch debounced 500ms on SSE events carrying taskId, status diffs
+ *    announced as ONE merged summary through the same coalesced #status
+ *  - #task-form: POST /api/task with mode from the clicked submit button
+ *    (event.submitter), aria-disabled pending pattern, inline title
+ *    validation (#err-title), AI-split polling every 2s up to 120s
  *  - WebAudio square-wave bleeps gated by #btn-sound (aria-pressed, persisted, OFF by default);
- *    every sound is mirrored as text in the log
- *  - #speed select drives the CSS transition-duration variable
- *  - POST /api/demo with disabled-while-running button
- *  - never steals focus, defensive JSON.parse, honors prefers-reduced-motion
+ *    every sound is mirrored as text via the #status announcer
+ *  - fixed --anim-duration (collapses to 0 under prefers-reduced-motion)
+ *  - never steals focus (form focus moves are user-initiated submits),
+ *    defensive JSON.parse, honors prefers-reduced-motion
  *  - Actor engine + choreographer: decorative boss/worker sprites act out
  *    pipeline events over the farmhouse map — workers sit at their stations,
  *    stand up, and carry the single shared paper to each other; a serialized
@@ -18,17 +25,26 @@
  *    v2); «Анимация» pause toggle (#btn-anim, localStorage "farm.anim") and
  *    prefers-reduced-motion collapse all choreography to instant final
  *    poses; map elements stay aria-hidden and are never announced
+ *  - Engine config: onboarding <dialog> (first visit, localStorage
+ *    "farm.engineChosen"), settings <dialog> behind #btn-settings
+ *    (GET/PUT /api/settings), per-task <details id="task-config"> prefilled
+ *    from the global settings; POST /api/task carries the per-task config
+ *  - Kanban cards render model/mode/speed chips from task.config
+ *  - Helpers: decorative subagent sprites in the Теплица while the active
+ *    task is in QA, gated by reduced-motion and the «Анимация» pause
  */
 "use strict";
 
 (function () {
   // ------------------------------------------------------------------ contract
 
+  // Farm-theme zone names (ids NEVER change); accusative carries its own
+  // preposition for the «Задача возвращена …» announcement (в Поле / на Рынок).
   const ZONES = [
-    { id: "kitchen", title: "Кухня — Сборка", accusative: "Сборку" },
-    { id: "corridor", title: "Коридор — Обработка", accusative: "Обработку" },
-    { id: "living", title: "Гостиная — QA", accusative: "QA" },
-    { id: "bath", title: "Ванная — Релиз", accusative: "Релиз" },
+    { id: "kitchen", title: "Поле — Сбор", accusative: "в Поле" },
+    { id: "corridor", title: "Амбар — Обработка", accusative: "в Амбар" },
+    { id: "living", title: "Теплица — QA", accusative: "в Теплицу" },
+    { id: "bath", title: "Рынок — Релиз", accusative: "на Рынок" },
   ];
 
   // Distinct glyph per state (glyph is aria-hidden: the Russian text carries meaning).
@@ -41,7 +57,7 @@
   };
 
   const SOUND_STORAGE_KEY = "farm-sound";
-  const FEED_CAP = 200;
+  const VIEW_STORAGE_KEY = "farm.view";
   const STATUS_INTERVAL_MS = 2000;
   // History replay must not trigger announcements/sounds; only "fresh" events do.
   const LIVE_WINDOW_MS = 5000;
@@ -52,11 +68,15 @@
     map: document.getElementById("map"),
     token: document.getElementById("token"),
     stages: document.getElementById("stages"),
-    feed: document.getElementById("feed"),
     status: document.getElementById("status"),
-    btnDemo: document.getElementById("btn-demo"),
     btnSound: document.getElementById("btn-sound"),
-    speed: document.getElementById("speed"),
+    viewFarmBtn: document.getElementById("view-farm-btn"),
+    viewBoardBtn: document.getElementById("view-board-btn"),
+    farmView: document.getElementById("farm-view"),
+    boardView: document.getElementById("board-view"),
+    taskForm: document.getElementById("task-form"),
+    taskTitle: document.getElementById("task-title"),
+    taskInput: document.getElementById("task-input"),
   };
 
   const zoneEls = {};
@@ -75,25 +95,13 @@
     return Boolean(reducedMotionQuery.matches);
   }
 
-  let speedMs = 600;
+  // Fixed animation duration (the old #speed select is gone): one sensible
+  // default; collapses to 0 under prefers-reduced-motion so the choreography
+  // gates keep working.
+  const ANIM_MS = 600;
 
-  function parseSpeedValue(raw) {
-    const v = String(raw == null ? "" : raw).trim().toLowerCase();
-    const named = {
-      "медленно": 1200, "slow": 1200,
-      "обычно": 600, "normal": 600, "medium": 600,
-      "быстро": 250, "fast": 250,
-    };
-    if (Object.prototype.hasOwnProperty.call(named, v)) return named[v];
-    const n = parseFloat(v);
-    if (!isFinite(n) || n <= 0) return 600;
-    // Plain multiplier (e.g. "0.5", "1", "2") vs explicit milliseconds (e.g. "600").
-    return n >= 50 ? Math.round(n) : Math.round(600 / n);
-  }
-
-  function applySpeed() {
-    if (els.speed) speedMs = parseSpeedValue(els.speed.value);
-    const effective = reducedMotion() ? 0 : speedMs;
+  function applyAnimDuration() {
+    const effective = reducedMotion() ? 0 : ANIM_MS;
     const root = document.documentElement;
     root.style.setProperty("--anim-duration", effective + "ms");
     if (els.token) {
@@ -224,7 +232,7 @@
       // Force reflow so the next move animates again.
       void token.offsetWidth;
       token.style.transition = saved;
-      applySpeed();
+      applyAnimDuration();
     } else {
       token.style.transform = "translate(" + Math.round(x) + "px, " + Math.round(y) + "px)";
     }
@@ -238,43 +246,11 @@
     }, 150);
   });
 
-  // ------------------------------------------------------------------ feed (role="log")
-
-  function logLine(text, type) {
-    if (!els.feed) return;
-    const scroller = els.feed.closest('[role="log"]');
-    const nearBottom = scroller
-      ? scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40
-      : false;
-    const li = document.createElement("li");
-    if (type) li.setAttribute("data-type", type);
-    li.textContent = text;
-    els.feed.appendChild(li);
-    while (els.feed.children.length > FEED_CAP) {
-      els.feed.removeChild(els.feed.firstChild);
-    }
-    // Keep the log pinned to the latest entry, but never fight a user
-    // who scrolled up to read history (and never move focus).
-    if (scroller && nearBottom) scroller.scrollTop = scroller.scrollHeight;
-  }
-
-  function formatTime(ts) {
-    const d = ts ? new Date(ts) : new Date();
-    if (isNaN(d.getTime())) return "";
-    function pad(n) { return n < 10 ? "0" + n : String(n); }
-    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
-  }
+  // ------------------------------------------------------------------ zone titles
 
   function zoneTitle(zoneId) {
     const zone = ZONES.find(function (z) { return z.id === zoneId; });
     return zone ? zone.title : zoneId;
-  }
-
-  function logEvent(ev) {
-    const time = formatTime(ev.ts);
-    const prefix = ev.zone ? "[" + zoneTitle(ev.zone) + "] " : "";
-    const message = typeof ev.message === "string" ? ev.message : "";
-    logLine((time ? time + " · " : "") + prefix + message, ev.type);
   }
 
   // ------------------------------------------------------------------ status announcer
@@ -372,7 +348,7 @@
     const sound = SOUNDS[name];
     if (!sound) return;
     bleep(sound.notes);
-    logLine(sound.label, "sound"); // every sound also appears as text in the log
+    announce(sound.label); // every sound is also mirrored as text via #status
   }
 
   function readSoundPref() {
@@ -410,39 +386,937 @@
       setSound(!soundOn, true);
       if (soundOn) {
         ensureAudio();
-        logLine("Звук включён", "sound");
+        announce("Звук включён");
       } else {
-        logLine("Звук выключен", "sound");
+        announce("Звук выключен");
       }
     });
   }
 
-  // ------------------------------------------------------------------ demo button
+  // ------------------------------------------------------------------ view switcher («Ферма» / «Доска»)
+  // Two aria-pressed buttons toggle the hidden attribute on the sections.
+  // Focus STAYS on the pressed button; nothing is announced — #status lives
+  // OUTSIDE both sections so it survives the hidden toggling.
 
-  let taskRunning = false;
-
-  // aria-disabled keeps the button focusable: disabling the focused element
-  // would drop focus to <body> (WCAG 2.4.3), and SSE-driven disabling must
-  // never steal focus.
-  function setDemoEnabled(enabled) {
-    if (els.btnDemo) els.btnDemo.setAttribute("aria-disabled", enabled ? "false" : "true");
+  function readViewPref() {
+    try {
+      return localStorage.getItem(VIEW_STORAGE_KEY) === "board" ? "board" : "farm";
+    } catch (err) {
+      return "farm";
+    }
   }
 
-  if (els.btnDemo) {
-    els.btnDemo.addEventListener("click", function () {
-      if (els.btnDemo.getAttribute("aria-disabled") === "true") return;
-      setDemoEnabled(false);
-      fetch("/api/demo", { method: "POST" })
+  function writeViewPref(view) {
+    try { localStorage.setItem(VIEW_STORAGE_KEY, view); } catch (err) { /* ignore */ }
+  }
+
+  function setView(view, persist) {
+    const board = view === "board";
+    if (els.farmView) els.farmView.hidden = board;
+    if (els.boardView) els.boardView.hidden = !board;
+    if (els.viewFarmBtn) els.viewFarmBtn.setAttribute("aria-pressed", board ? "false" : "true");
+    if (els.viewBoardBtn) els.viewBoardBtn.setAttribute("aria-pressed", board ? "true" : "false");
+    if (persist) writeViewPref(board ? "board" : "farm");
+    if (!board) {
+      // Geometry measured while the farm was hidden is all zeros: repaint
+      // the token and the actor layer at final poses once visible again.
+      requestAnimationFrame(function () {
+        if (currentZoneId) moveToken(currentZoneId, true);
+        repaintAll();
+      });
+    }
+  }
+
+  function initViewSwitcher() {
+    if (!els.farmView || !els.boardView) return; // old markup: nothing to switch
+    setView(readViewPref(), false);
+    if (els.viewFarmBtn) {
+      els.viewFarmBtn.addEventListener("click", function () { setView("farm", true); });
+    }
+    if (els.viewBoardBtn) {
+      els.viewBoardBtn.addEventListener("click", function () { setView("board", true); });
+    }
+  }
+
+  // ------------------------------------------------------------------ kanban board (GET /api/tasks)
+  // Renders the task store into 6 columns + an epic strip ABOVE them for
+  // splitting/split parents. NO aria-live on the board itself: movements are
+  // announced ONLY through the coalesced #status as ONE merged summary
+  // («Парсер → QA; Сборка +2», cap 2 items then «и ещё N изменений»).
+
+  const BOARD_COLUMNS = [
+    { key: "queue", title: "Очередь" },
+    { key: "kitchen", title: "Сбор" },
+    { key: "corridor", title: "Обработка" },
+    { key: "living", title: "QA" },
+    { key: "bath", title: "Релиз" },
+    { key: "done", title: "Готово" },
+  ];
+  const BOARD_REFETCH_MS = 500;
+  const CARD_MSG_MAX = 80;
+
+  let boardColumnsCache = null; // key -> { heading, count, list }
+  let boardEpicStrip = null;
+  let boardPrevColumns = null;  // task id -> column key; null until the first paint
+  let boardRefetchTimer = null;
+  let boardFetchInFlight = false;
+  let boardFetchAgain = false;
+
+  function columnForTask(task) {
+    switch (task.status) {
+      case "queued": return "queue";
+      case "kitchen":
+      case "corridor":
+      case "living":
+      case "bath": return task.status;
+      case "done":
+      case "failed": return "done"; // failed cards live in «Готово» with a «Сбой» badge
+      default: return null; // splitting/split parents render in the epic strip
+    }
+  }
+
+  function truncateText(text, max) {
+    const s = typeof text === "string" ? text : "";
+    return s.length > max ? s.slice(0, max - 1) + "…" : s;
+  }
+
+  // Find-or-create the board DOM per the contract: section.board-col with
+  // <h3 id="col-<key>">Название <span class="col-count">(N)</span></h3> +
+  // <ul aria-labelledby="col-<key>">. Markup shipped in index.html is reused
+  // as-is; anything missing is built defensively.
+  function ensureBoardDom() {
+    if (!els.boardView) els.boardView = document.getElementById("board-view");
+    const view = els.boardView;
+    if (!view) return null;
+    if (boardColumnsCache && boardEpicStrip && boardEpicStrip.parentNode) {
+      return boardColumnsCache;
+    }
+
+    let board = view.querySelector(".board");
+    if (!board) {
+      board = document.createElement("div");
+      board.className = "board";
+      view.appendChild(board);
+    }
+
+    let strip = view.querySelector(".epic-strip");
+    if (!strip) {
+      strip = document.createElement("div");
+      strip.className = "epic-strip";
+      strip.hidden = true;
+      board.parentNode.insertBefore(strip, board); // epics sit ABOVE the columns
+    }
+    boardEpicStrip = strip;
+
+    const cols = {};
+    for (const col of BOARD_COLUMNS) {
+      const headingId = "col-" + col.key;
+      let heading = document.getElementById(headingId);
+      let list = view.querySelector('ul[aria-labelledby="' + headingId + '"]');
+      if (!heading || !list) {
+        const section = document.createElement("section");
+        section.className = "board-col";
+        heading = document.createElement("h3");
+        heading.id = headingId;
+        heading.appendChild(document.createTextNode(col.title + " "));
+        list = document.createElement("ul");
+        list.setAttribute("aria-labelledby", headingId);
+        section.appendChild(heading);
+        section.appendChild(list);
+        board.appendChild(section);
+      }
+      let count = heading.querySelector(".col-count");
+      if (!count) {
+        count = document.createElement("span");
+        count.className = "col-count";
+        count.textContent = "(0)";
+        heading.appendChild(document.createTextNode(" "));
+        heading.appendChild(count);
+      }
+      cols[col.key] = { heading: heading, count: count, list: list };
+    }
+    boardColumnsCache = cols;
+    return cols;
+  }
+
+  function buildCard(task) {
+    const li = document.createElement("li");
+    li.className = "board-card";
+
+    const title = document.createElement("span");
+    title.className = "card-title";
+    title.textContent = typeof task.title === "string" && task.title
+      ? task.title
+      : "Задача";
+    li.appendChild(title);
+
+    // Config chips right after the title (contract DOM order:
+    // title -> badges -> status): model label, then mode/speed, then «ИИ».
+    for (const chip of buildConfigChips(task)) {
+      li.appendChild(document.createTextNode(" "));
+      li.appendChild(chip);
+    }
+
+    if (task.source === "subtask" || task.source === "ai-parent") {
+      const badge = document.createElement("span");
+      badge.className = "badge-ai";
+      const glyph = document.createElement("span");
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.textContent = "ИИ";
+      const sr = document.createElement("span");
+      sr.className = "sr-only";
+      sr.textContent = "источник: ИИ";
+      badge.appendChild(glyph);
+      badge.appendChild(sr);
+      li.appendChild(document.createTextNode(" "));
+      li.appendChild(badge);
+    }
+
+    if (task.status === "failed") {
+      // text + glyph, never color alone (state-error color comes from CSS)
+      const fail = document.createElement("span");
+      fail.className = "badge-fail";
+      const glyph = document.createElement("span");
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.textContent = "✗ ";
+      fail.appendChild(glyph);
+      fail.appendChild(document.createTextNode("Сбой"));
+      li.appendChild(document.createTextNode(" "));
+      li.appendChild(fail);
+    }
+
+    if (typeof task.attempts === "number" && task.attempts > 1) {
+      const attempts = document.createElement("span");
+      attempts.className = "card-attempts";
+      attempts.textContent = "Попытки: " + task.attempts;
+      li.appendChild(document.createTextNode(" "));
+      li.appendChild(attempts);
+    }
+
+    if (typeof task.lastMessage === "string" && task.lastMessage) {
+      const msg = document.createElement("p");
+      msg.className = "card-msg";
+      msg.textContent = truncateText(task.lastMessage, CARD_MSG_MAX);
+      li.appendChild(msg);
+    }
+    return li;
+  }
+
+  function buildEpic(task, children) {
+    const wrap = document.createElement("div");
+    wrap.className = "epic";
+    const titleId = "epic-title-" + String(task.id).replace(/[^\w-]/g, "");
+
+    const title = document.createElement("p");
+    title.className = "epic-title";
+    title.id = titleId;
+    title.textContent = typeof task.title === "string" && task.title
+      ? task.title
+      : "Задача ИИ";
+    wrap.appendChild(title);
+
+    const total = children.length;
+    const finished = children.filter(function (c) {
+      return c.status === "done" || c.status === "failed";
+    }).length;
+
+    const progress = document.createElement("progress");
+    progress.max = Math.max(total, 1);
+    progress.value = finished;
+    progress.setAttribute("aria-labelledby", titleId);
+    wrap.appendChild(progress);
+    wrap.appendChild(document.createTextNode(" "));
+
+    const label = document.createElement("span");
+    label.className = "epic-count";
+    label.textContent = total > 0
+      ? finished + "/" + total + " готово"
+      : "ИИ разбивает задачу…";
+    wrap.appendChild(label);
+    return wrap;
+  }
+
+  function renderBoard(tasks) {
+    const cols = ensureBoardDom();
+    if (!cols || !Array.isArray(tasks)) return;
+
+    // Epic strip (splitting/split parents).
+    const epics = tasks.filter(function (t) {
+      return t && (t.status === "splitting" || t.status === "split");
+    });
+    boardEpicStrip.textContent = "";
+    boardEpicStrip.hidden = epics.length === 0;
+    for (const parent of epics) {
+      const children = tasks.filter(function (t) {
+        return t && t.parentId === parent.id;
+      });
+      boardEpicStrip.appendChild(buildEpic(parent, children));
+    }
+
+    // Columns + heading counts.
+    const byCol = {};
+    for (const col of BOARD_COLUMNS) byCol[col.key] = [];
+    const nextColumns = {};
+    for (const task of tasks) {
+      if (!task || task.id == null) continue;
+      const key = columnForTask(task);
+      if (!key) continue;
+      byCol[key].push(task);
+      nextColumns[task.id] = key;
+    }
+    for (const col of BOARD_COLUMNS) {
+      const slot = cols[col.key];
+      slot.list.textContent = "";
+      for (const task of byCol[col.key]) slot.list.appendChild(buildCard(task));
+      slot.count.textContent = "(" + byCol[col.key].length + ")";
+    }
+
+    announceBoardDiff(boardPrevColumns, nextColumns, tasks);
+    boardPrevColumns = nextColumns;
+  }
+
+  // ONE merged summary per render through the coalesced #status announcer:
+  // single mover => «Название → Колонка», several into one column =>
+  // «Колонка +N»; at most 2 items, then «и ещё N изменений».
+  function announceBoardDiff(prev, next, tasks) {
+    if (!prev) return; // first paint (incl. state restored on boot) is silent
+    const titles = {};
+    for (const task of tasks) {
+      if (task && task.id != null) titles[task.id] = task.title;
+    }
+    const moved = {}; // column key -> titles of tasks that just entered it
+    for (const id in next) {
+      if (!Object.prototype.hasOwnProperty.call(next, id)) continue;
+      if (prev[id] === next[id]) continue;
+      if (!moved[next[id]]) moved[next[id]] = [];
+      moved[next[id]].push(typeof titles[id] === "string" && titles[id] ? titles[id] : "Задача");
+    }
+    const parts = [];
+    const counts = [];
+    for (const col of BOARD_COLUMNS) {
+      const list = moved[col.key];
+      if (!list) continue;
+      parts.push(list.length === 1
+        ? truncateText(list[0], 40) + " → " + col.title
+        : col.title + " +" + list.length);
+      counts.push(list.length);
+    }
+    if (parts.length === 0) return;
+    let text;
+    if (parts.length <= 2) {
+      text = parts.join("; ");
+    } else {
+      const rest = counts.slice(2).reduce(function (a, b) { return a + b; }, 0);
+      text = parts.slice(0, 2).join("; ") + "; и ещё " + rest + " изменений";
+    }
+    announce(text);
+  }
+
+  function fetchBoard() {
+    if (boardFetchInFlight) {
+      boardFetchAgain = true;
+      return Promise.resolve(null);
+    }
+    boardFetchInFlight = true;
+    return fetch("/api/tasks")
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        const tasks = data && Array.isArray(data.tasks) ? data.tasks : null;
+        if (tasks) renderBoard(tasks);
+        return tasks;
+      })
+      .catch(function () { return null; })
+      .then(function (tasks) {
+        boardFetchInFlight = false;
+        if (boardFetchAgain) {
+          boardFetchAgain = false;
+          scheduleBoardRefetch();
+        }
+        return tasks;
+      });
+  }
+
+  function scheduleBoardRefetch() {
+    if (boardRefetchTimer) return; // debounce: one refetch per 500ms window
+    boardRefetchTimer = setTimeout(function () {
+      boardRefetchTimer = null;
+      fetchBoard();
+    }, BOARD_REFETCH_MS);
+  }
+
+  // ------------------------------------------------------------------ task form (#task-form)
+  // POST /api/task with the mode taken from the clicked submit button
+  // (event.submitter). Pending uses the existing aria-disabled pattern so
+  // focus never drops to <body>; focus moves below are user-initiated
+  // (they happen in direct response to the submit).
+
+  const SPLIT_POLL_MS = 2000;
+  const SPLIT_POLL_MAX_MS = 120000;
+  let taskFormPending = false;
+
+  function setFormPending(pending) {
+    taskFormPending = Boolean(pending);
+    if (!els.taskForm) return;
+    const buttons = els.taskForm.querySelectorAll('button[name="mode"], button[type="submit"]');
+    for (const btn of buttons) {
+      btn.setAttribute("aria-disabled", taskFormPending ? "true" : "false");
+    }
+  }
+
+  function showTitleError(message) {
+    if (!els.taskTitle) return;
+    let err = document.getElementById("err-title");
+    if (!err) {
+      err = document.createElement("p");
+      err.id = "err-title";
+      err.className = "field-error";
+      els.taskTitle.insertAdjacentElement("afterend", err);
+    }
+    err.textContent = "✗ " + message; // glyph + text, never color alone
+    const described = (els.taskTitle.getAttribute("aria-describedby") || "")
+      .split(/\s+/).filter(Boolean);
+    if (described.indexOf("err-title") === -1) described.push("err-title");
+    els.taskTitle.setAttribute("aria-describedby", described.join(" "));
+    els.taskTitle.setAttribute("aria-invalid", "true");
+    els.taskTitle.focus(); // user-initiated: the submit that just failed
+  }
+
+  function clearTitleError() {
+    const err = document.getElementById("err-title");
+    if (err) err.textContent = "";
+    if (!els.taskTitle) return;
+    els.taskTitle.removeAttribute("aria-invalid");
+    const described = (els.taskTitle.getAttribute("aria-describedby") || "")
+      .split(/\s+/)
+      .filter(function (id) { return id && id !== "err-title"; });
+    if (described.length) els.taskTitle.setAttribute("aria-describedby", described.join(" "));
+    else els.taskTitle.removeAttribute("aria-describedby");
+  }
+
+  // AI mode answers async: poll /api/tasks every 2s (up to 120s) until the
+  // parent leaves "splitting", then announce the subtask count. Each poll
+  // also repaints the board, so subtasks appear as soon as they exist.
+  function pollSplitResult(taskId) {
+    const started = Date.now();
+    function tick() {
+      fetchBoard().then(function (tasks) {
+        const list = Array.isArray(tasks) ? tasks : [];
+        const parent = list.find(function (t) { return t && t.id === taskId; });
+        if (parent && parent.status !== "splitting") {
+          if (parent.status === "failed") {
+            announce(typeof parent.lastMessage === "string" && parent.lastMessage
+              ? truncateText(parent.lastMessage, 120)
+              : "Не удалось разделить задачу");
+          } else {
+            const n = list.filter(function (t) {
+              return t && t.parentId === taskId;
+            }).length;
+            announce("Задача разделена на " + n + " подзадач");
+          }
+          return;
+        }
+        if (Date.now() - started < SPLIT_POLL_MAX_MS) {
+          setTimeout(tick, SPLIT_POLL_MS);
+        } else {
+          announce("ИИ всё ещё разбивает задачу — доска обновится автоматически");
+        }
+      });
+    }
+    setTimeout(tick, SPLIT_POLL_MS);
+  }
+
+  function initTaskForm() {
+    const form = els.taskForm;
+    if (!form) return;
+    form.noValidate = true; // inline #err-title validation instead of native bubbles
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (taskFormPending) return; // aria-disabled buttons stay focusable
+
+      const submitter = e.submitter || null;
+      const mode = submitter && submitter.value === "ai" ? "ai" : "simple";
+      const title = els.taskTitle ? els.taskTitle.value.trim() : "";
+      const input = els.taskInput ? els.taskInput.value : "";
+
+      if (!title) {
+        showTitleError("Укажите название задачи");
+        return;
+      }
+      clearTitleError();
+
+      setFormPending(true);
+      announce(mode === "ai"
+        ? "ИИ разбивает задачу, это может занять до минуты"
+        : "Создаём задачу…");
+
+      const payload = { title: title, input: input, mode: mode };
+      const config = taskConfigPayload();
+      if (config) payload.config = config;
+
+      fetch("/api/task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
         .then(function (res) {
           if (!res.ok) throw new Error("HTTP " + res.status);
-          logLine("Демо-задача запущена", "info");
+          return res.json().catch(function () { return {}; });
+        })
+        .then(function (data) {
+          setFormPending(false);
+          if (els.taskTitle) els.taskTitle.value = "";
+          if (els.taskInput) els.taskInput.value = "";
+          if (els.taskTitle) els.taskTitle.focus(); // back to the start of the form
+          if (mode === "ai") {
+            if (data && data.taskId != null) pollSplitResult(data.taskId);
+          } else {
+            announce("Задача добавлена в очередь");
+          }
+          scheduleBoardRefetch();
         })
         .catch(function () {
-          setDemoEnabled(true);
-          logLine("Не удалось запустить демо-задачу", "error");
-          announce("Не удалось запустить демо-задачу");
+          setFormPending(false);
+          announce("Не удалось создать задачу — попробуйте ещё раз");
         });
     });
+
+    if (els.taskTitle) {
+      els.taskTitle.addEventListener("input", function () {
+        if (els.taskTitle.getAttribute("aria-invalid") === "true" && els.taskTitle.value.trim()) {
+          clearTitleError(); // the field is valid again as soon as there is text
+        }
+      });
+    }
+  }
+
+  // ------------------------------------------------------------------ engine config
+  // Global settings (onboarding + settings dialog, GET/PUT /api/settings)
+  // and the per-task config <details id="task-config">. Every init binds
+  // defensively: when the markup has not shipped yet it simply no-ops.
+  // Settings shape: {engine, claude:{model, mode, subagents:{model, count,
+  // types}}, codex:{model, speed}}.
+
+  const ENGINE_CHOSEN_KEY = "farm.engineChosen";
+  const SUB_COUNT_MIN = 0;
+  const SUB_COUNT_MAX = 8;
+  const SUB_TYPES = ["review", "bugs", "optimize", "factcheck"];
+
+  // Hardcoded fallback catalog; refreshed from /api/state when the server
+  // exposes claudeModels/codexModels (farm.config.json catalog).
+  let claudeModels = [
+    { id: "claude-opus-4-8", label: "Клауд 4.8" },
+    { id: "claude-sonnet-4-6", label: "Соннет 4.6" },
+    { id: "claude-haiku-4-5-20251001", label: "Хайку 4.5" },
+  ];
+  let codexModels = [
+    { id: "gpt-5.5", label: "GPT-5.5" },
+  ];
+
+  const MODE_OPTIONS = [
+    { id: "ultracode", label: "Ультракод" },
+    { id: "normal", label: "Обычный" },
+  ];
+  const SPEED_OPTIONS = [
+    { id: "normal", label: "Обычная" },
+    { id: "faster", label: "Фастер" },
+  ];
+  // Chip labels on kanban cards (full text, never abbreviations).
+  const MODE_CHIP_LABELS = { ultracode: "Ультракод", normal: "Обычный" };
+  const SPEED_CHIP_LABELS = { normal: "Обычный", faster: "Фастер" };
+
+  function modelLabel(id) {
+    if (typeof id !== "string" || !id) return null;
+    for (const m of claudeModels) { if (m.id === id) return m.label; }
+    for (const m of codexModels) { if (m.id === id) return m.label; }
+    return id; // unknown id: show it verbatim rather than hiding the chip
+  }
+
+  function defaultSettings() {
+    return {
+      engine: "claude",
+      claude: {
+        model: "claude-opus-4-8",
+        mode: "ultracode",
+        subagents: { model: "claude-sonnet-4-6", count: 3, types: ["review", "bugs"] },
+      },
+      codex: { model: "gpt-5.5", speed: "normal" },
+    };
+  }
+
+  let currentSettings = defaultSettings();
+
+  function clampCount(value, fallback) {
+    const n = parseInt(value, 10);
+    if (!isFinite(n)) return fallback;
+    return Math.min(SUB_COUNT_MAX, Math.max(SUB_COUNT_MIN, n));
+  }
+
+  // Merge an arbitrary payload over the defaults; junk never sticks.
+  function normalizeSettings(raw) {
+    const base = defaultSettings();
+    if (!raw || typeof raw !== "object") return base;
+    if (raw.engine === "codex" || raw.engine === "claude") base.engine = raw.engine;
+    const claude = raw.claude && typeof raw.claude === "object" ? raw.claude : {};
+    if (typeof claude.model === "string" && claude.model) base.claude.model = claude.model;
+    if (claude.mode === "normal" || claude.mode === "ultracode") base.claude.mode = claude.mode;
+    const sub = claude.subagents && typeof claude.subagents === "object" ? claude.subagents : {};
+    if (typeof sub.model === "string" && sub.model) base.claude.subagents.model = sub.model;
+    base.claude.subagents.count = clampCount(sub.count, base.claude.subagents.count);
+    if (Array.isArray(sub.types)) {
+      base.claude.subagents.types = sub.types.filter(function (t) {
+        return SUB_TYPES.indexOf(t) !== -1;
+      });
+    }
+    const codex = raw.codex && typeof raw.codex === "object" ? raw.codex : {};
+    if (typeof codex.model === "string" && codex.model) base.codex.model = codex.model;
+    if (codex.speed === "faster" || codex.speed === "normal") base.codex.speed = codex.speed;
+    return base;
+  }
+
+  function putSettings(payload) {
+    return fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json().catch(function () { return null; });
+    });
+  }
+
+  function fetchSettings() {
+    return fetch("/api/settings")
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        currentSettings = normalizeSettings(data && data.settings ? data.settings : data);
+      })
+      .catch(function () { /* endpoint missing/offline: defaults stay */ });
+  }
+
+  function validCatalogEntry(m) {
+    return Boolean(m) && typeof m === "object"
+      && typeof m.id === "string" && m.id
+      && typeof m.label === "string" && m.label;
+  }
+
+  function fetchModelCatalog() {
+    return fetch("/api/state")
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || typeof data !== "object") return;
+        const src = data.catalog && typeof data.catalog === "object" ? data.catalog : data;
+        if (Array.isArray(src.claudeModels)) {
+          const list = src.claudeModels.filter(validCatalogEntry);
+          if (list.length) claudeModels = list;
+        }
+        if (Array.isArray(src.codexModels)) {
+          const list = src.codexModels.filter(validCatalogEntry);
+          if (list.length) codexModels = list;
+        }
+      })
+      .catch(function () { /* hardcoded catalog stays */ });
+  }
+
+  // ---- shared controls plumbing (settings dialog "set-", task config "cfg-") ----
+
+  function ensureOptions(select, options) {
+    if (!select || select.options.length > 0) return; // markup owns its options
+    for (const opt of options) {
+      const o = document.createElement("option");
+      o.value = opt.id;
+      o.textContent = opt.label;
+      select.appendChild(o);
+    }
+  }
+
+  function engineControls(root, prefix) {
+    if (!root) return null;
+    function byId(suffix) {
+      const el = document.getElementById(prefix + suffix);
+      return el && root.contains(el) ? el : null;
+    }
+    const controls = {
+      root: root,
+      radios: [],
+      model: byId("model"),
+      mode: byId("mode"),
+      subModel: byId("sub-model"),
+      subCount: byId("sub-count"),
+      codexModel: byId("codex-model"),
+      codexSpeed: byId("codex-speed"),
+      typeBoxes: Array.prototype.slice.call(
+        root.querySelectorAll('input[type="checkbox"][name="' + prefix + 'sub-type"]')
+      ),
+    };
+    const radios = root.querySelectorAll('input[type="radio"]');
+    for (const radio of radios) {
+      if (radio.value === "claude" || radio.value === "codex") controls.radios.push(radio);
+    }
+    controls.claudeFieldset = controls.model ? controls.model.closest("fieldset") : null;
+    controls.codexFieldset = controls.codexModel ? controls.codexModel.closest("fieldset") : null;
+    return controls;
+  }
+
+  function selectedEngine(controls) {
+    if (controls) {
+      for (const radio of controls.radios) {
+        if (radio.checked) return radio.value;
+      }
+    }
+    return currentSettings.engine;
+  }
+
+  // The INACTIVE engine fieldset gets the hidden attribute (not disabled),
+  // so it leaves the a11y tree entirely; focus never moves on radio change.
+  function applyEngineFieldsets(controls) {
+    if (!controls) return;
+    const engine = selectedEngine(controls);
+    if (controls.claudeFieldset) controls.claudeFieldset.hidden = engine !== "claude";
+    if (controls.codexFieldset) controls.codexFieldset.hidden = engine !== "codex";
+  }
+
+  function bindEngineRadios(controls) {
+    if (!controls) return;
+    for (const radio of controls.radios) {
+      radio.addEventListener("change", function () { applyEngineFieldsets(controls); });
+    }
+  }
+
+  function fillEngineControls(controls, settings) {
+    if (!controls) return;
+    for (const radio of controls.radios) {
+      radio.checked = radio.value === settings.engine;
+    }
+    ensureOptions(controls.model, claudeModels);
+    ensureOptions(controls.subModel, claudeModels);
+    ensureOptions(controls.mode, MODE_OPTIONS);
+    ensureOptions(controls.codexModel, codexModels);
+    ensureOptions(controls.codexSpeed, SPEED_OPTIONS);
+    if (controls.model) controls.model.value = settings.claude.model;
+    if (controls.mode) controls.mode.value = settings.claude.mode;
+    if (controls.subModel) controls.subModel.value = settings.claude.subagents.model;
+    if (controls.subCount) controls.subCount.value = String(settings.claude.subagents.count);
+    for (const box of controls.typeBoxes) {
+      box.checked = settings.claude.subagents.types.indexOf(box.value) !== -1;
+    }
+    if (controls.codexModel) controls.codexModel.value = settings.codex.model;
+    if (controls.codexSpeed) controls.codexSpeed.value = settings.codex.speed;
+    applyEngineFieldsets(controls);
+  }
+
+  function readEngineControls(controls) {
+    const out = normalizeSettings(currentSettings); // deep copy of the current state
+    if (!controls) return out;
+    out.engine = selectedEngine(controls) === "codex" ? "codex" : "claude";
+    if (controls.model && controls.model.value) out.claude.model = controls.model.value;
+    if (controls.mode && (controls.mode.value === "normal" || controls.mode.value === "ultracode")) {
+      out.claude.mode = controls.mode.value;
+    }
+    if (controls.subModel && controls.subModel.value) {
+      out.claude.subagents.model = controls.subModel.value;
+    }
+    if (controls.subCount) {
+      out.claude.subagents.count = clampCount(controls.subCount.value, out.claude.subagents.count);
+    }
+    if (controls.typeBoxes.length) {
+      out.claude.subagents.types = controls.typeBoxes
+        .filter(function (box) { return box.checked; })
+        .map(function (box) { return box.value; })
+        .filter(function (v) { return SUB_TYPES.indexOf(v) !== -1; });
+    }
+    if (controls.codexModel && controls.codexModel.value) out.codex.model = controls.codexModel.value;
+    if (controls.codexSpeed
+        && (controls.codexSpeed.value === "normal" || controls.codexSpeed.value === "faster")) {
+      out.codex.speed = controls.codexSpeed.value;
+    }
+    return out;
+  }
+
+  // ---- onboarding dialog (first visit only) ----
+
+  function engineChosen() {
+    try { return localStorage.getItem(ENGINE_CHOSEN_KEY) === "1"; } catch (err) { return false; }
+  }
+
+  function markEngineChosen() {
+    try { localStorage.setItem(ENGINE_CHOSEN_KEY, "1"); } catch (err) { /* ignore */ }
+  }
+
+  function findEngineButton(dialog, engine, pattern) {
+    let btn = dialog.querySelector('button[data-engine="' + engine + '"]');
+    if (btn) return btn;
+    btn = dialog.querySelector('button[value="' + engine + '"]');
+    if (btn) return btn;
+    const buttons = dialog.querySelectorAll("button");
+    for (const b of buttons) {
+      if (pattern.test(b.textContent || "")) return b;
+    }
+    return null;
+  }
+
+  function initOnboarding() {
+    const dialog = document.getElementById("onboarding-dialog");
+    if (!dialog || typeof dialog.showModal !== "function") return;
+    if (engineChosen()) return; // first visit only
+
+    let picked = false;
+
+    function choose(engine) {
+      picked = true;
+      markEngineChosen();
+      currentSettings.engine = engine;
+      putSettings({ engine: engine })
+        .then(function () { currentSettings.engine = engine; }) // wins any GET race
+        .catch(function () { /* keep the local choice */ });
+      prefillTaskConfig();
+      announce(engine === "codex"
+        ? "Движок: Кодекс. Изменить можно в настройках"
+        : "Движок: Клауд. Изменить можно в настройках");
+      if (dialog.open) dialog.close();
+    }
+
+    const claudeBtn = findEngineButton(dialog, "claude", /клауд/i);
+    const codexBtn = findEngineButton(dialog, "codex", /кодекс/i);
+    if (claudeBtn) claudeBtn.addEventListener("click", function () { choose("claude"); });
+    if (codexBtn) codexBtn.addEventListener("click", function () { choose("codex"); });
+
+    // Escape is ALLOWED: closing without a pick defaults to Клауд and still
+    // sets the flag so the dialog never nags again.
+    dialog.addEventListener("close", function () {
+      if (!picked) choose("claude");
+    });
+
+    try { dialog.showModal(); } catch (err) { /* already open / unsupported */ }
+  }
+
+  // ---- settings dialog (#btn-settings -> #settings-dialog) ----
+
+  let settingsControls = null;
+
+  function initSettingsDialog() {
+    const btn = document.getElementById("btn-settings");
+    const dialog = document.getElementById("settings-dialog");
+    if (!btn || !dialog || typeof dialog.showModal !== "function") return;
+    settingsControls = engineControls(dialog, "set-");
+    bindEngineRadios(settingsControls);
+
+    let saveRequested = false;
+
+    let saveBtn = dialog.querySelector('button[value="save"]');
+    if (!saveBtn) {
+      const buttons = dialog.querySelectorAll("button");
+      for (const b of buttons) {
+        if (/сохран/i.test(b.textContent || "")) { saveBtn = b; break; }
+      }
+    }
+    if (saveBtn) {
+      saveBtn.addEventListener("click", function () { saveRequested = true; });
+    }
+
+    btn.addEventListener("click", function () {
+      saveRequested = false;
+      fillEngineControls(settingsControls, currentSettings);
+      // Refresh from the server, refill while the user has not saved yet.
+      fetchSettings().then(function () {
+        if (dialog.open && !saveRequested) {
+          fillEngineControls(settingsControls, currentSettings);
+        }
+      });
+      try { dialog.showModal(); } catch (err) { /* ignore */ }
+    });
+
+    // «Отмена»/Escape close without saving; focus return is native <dialog>.
+    dialog.addEventListener("close", function () {
+      const saved = saveRequested || /^(save|сохранить)$/i.test(dialog.returnValue || "");
+      saveRequested = false;
+      if (!saved) return;
+      currentSettings = readEngineControls(settingsControls);
+      prefillTaskConfig();
+      putSettings(currentSettings)
+        .then(function () { announce("Настройки сохранены"); })
+        .catch(function () { announce("Не удалось сохранить настройки"); });
+    });
+  }
+
+  // ---- per-task config (<details id="task-config"> inside #task-form) ----
+
+  let taskConfigControls = null;
+
+  function initTaskConfig() {
+    const details = document.getElementById("task-config");
+    if (!details) return;
+    taskConfigControls = engineControls(details, "cfg-");
+    bindEngineRadios(taskConfigControls);
+    prefillTaskConfig();
+  }
+
+  // Silent prefill from the global settings: on load, after onboarding and
+  // after every settings save. Never announces, never moves focus.
+  function prefillTaskConfig() {
+    if (taskConfigControls) fillEngineControls(taskConfigControls, currentSettings);
+  }
+
+  // POST /api/task config payload: {engine, model, mode, subagents} for
+  // Клауд, {engine, model, speed} for Кодекс; null while the per-task
+  // markup has not shipped (the server then applies the global defaults).
+  function taskConfigPayload() {
+    if (!taskConfigControls) return null;
+    const cfg = readEngineControls(taskConfigControls);
+    if (cfg.engine === "codex") {
+      return { engine: "codex", model: cfg.codex.model, speed: cfg.codex.speed };
+    }
+    return {
+      engine: "claude",
+      model: cfg.claude.model,
+      mode: cfg.claude.mode,
+      subagents: {
+        model: cfg.claude.subagents.model,
+        count: cfg.claude.subagents.count,
+        types: cfg.claude.subagents.types.slice(),
+      },
+    };
+  }
+
+  // ---- kanban config chips ----
+
+  function makeChip(text, extraClass) {
+    const chip = document.createElement("span");
+    chip.className = "card-chip" + (extraClass ? " " + extraClass : "");
+    chip.textContent = text;
+    return chip;
+  }
+
+  // Non-interactive full-text chips after the card title: model label
+  // («Клауд 4.8»), then mode/speed («Ультракод»/«Фастер»/«Обычный»).
+  function buildConfigChips(task) {
+    const cfg = task && task.config && typeof task.config === "object" ? task.config : null;
+    if (!cfg) return [];
+    const chips = [];
+    const label = modelLabel(cfg.model);
+    if (label) chips.push(makeChip(label, "card-chip-model"));
+    const modeText = cfg.engine === "codex"
+      ? SPEED_CHIP_LABELS[cfg.speed]
+      : MODE_CHIP_LABELS[cfg.mode];
+    if (modeText) chips.push(makeChip(modeText, "card-chip-mode"));
+    return chips;
+  }
+
+  function initEngineUi() {
+    initSettingsDialog();
+    initTaskConfig();
+    fetchModelCatalog();
+    fetchSettings().then(prefillTaskConfig);
+    initOnboarding();
   }
 
   // ------------------------------------------------------------------ event state machine
@@ -452,8 +1326,8 @@
   // Zone-card data-state changes and clothesline pip updates are handed off
   // to notifyCharacterEngine, which applies them inside the SAME queued beat
   // as the matching choreo* step, so badges never run ahead of the house.
-  // #status announcements, feed lines and sounds stay on server event time
-  // (a11y requirement) — only this visual state lags with the animation.
+  // #status announcements, board refetches and sounds stay on server event
+  // time (a11y requirement) — only this visual state lags with the animation.
   // When no choreography beat picks the thunk up (farmhouse missing, no
   // matching step) it is applied immediately, i.e. on server time.
   let pendingVisual = null;
@@ -473,16 +1347,13 @@
   }
 
   function handleEvent(ev) {
-    logEvent(ev);
     const live = isLive(ev);
     const zone = typeof ev.zone === "string" ? ev.zone : null;
 
     switch (ev.type) {
       case "task.created": {
         deferVisual(resetZones);
-        taskRunning = true;
         bouncePending = false;
-        setDemoEnabled(false);
         if (live) {
           announce(ev.message || "Новая задача создана");
           playSound("take");
@@ -508,7 +1379,7 @@
         if (live) {
           if (bouncePending) {
             const z = ZONES[idx];
-            announce("Задача возвращена в " + (z ? z.accusative : zone));
+            announce("Задача возвращена " + (z ? z.accusative : "в " + zone));
           } else {
             announce("Задача в зоне «" + zoneTitle(zone) + "»");
           }
@@ -539,13 +1410,11 @@
         break;
       }
       case "task.done": {
-        taskRunning = false;
         bouncePending = false;
         deferVisual(function () {
           for (const z of ZONES) setZoneState(z.id, "done");
           updateStages(ZONES.length);
         });
-        setDemoEnabled(true);
         if (live) {
           announce(ev.message || "Задача готова, клиенту можно отправлять!");
           playSound("victory");
@@ -553,10 +1422,8 @@
         break;
       }
       case "task.failed": {
-        taskRunning = false;
         bouncePending = false;
         if (zone) deferVisual(function () { setZoneState(zone, "error"); });
-        setDemoEnabled(true);
         if (live) {
           announceFailure(ev.message || "Задача провалена");
           playSound("error");
@@ -578,7 +1445,7 @@
     try {
       source = new EventSource("/events");
     } catch (err) {
-      logLine("Лента событий недоступна", "error");
+      announce("Поток событий недоступен");
       return;
     }
 
@@ -592,12 +1459,19 @@
       }
       handleEvent(ev);
       notifyCharacterEngine(ev);
+      updateHelpersForEvent(ev);
+      // Any event tied to a task may have moved a board card: refetch
+      // (debounced 500ms) and let the status-diff produce ONE summary.
+      if (typeof ev.taskId === "string" || typeof ev.taskId === "number") {
+        scheduleBoardRefetch();
+      }
     };
 
     source.onopen = function () {
       if (connectionLost) {
         connectionLost = false;
-        logLine("Связь с фермой восстановлена", "info");
+        announce("Связь с фермой восстановлена");
+        scheduleBoardRefetch(); // catch up on anything missed while offline
       }
     };
 
@@ -605,7 +1479,7 @@
       // EventSource reconnects on its own; note it once per outage.
       if (!connectionLost) {
         connectionLost = true;
-        logLine("Связь с фермой потеряна, переподключаемся…", "error");
+        announce("Связь с фермой потеряна, переподключаемся…");
       }
     };
   }
@@ -616,7 +1490,7 @@
   // out pipeline events (sit at desks, stand up, carry the shared paper to
   // each other) via a serialized action queue. Purely visual: every element
   // it touches is aria-hidden and NOTHING in this section ever calls
-  // announce()/announceFailure()/logLine() — map motion is never announced
+  // announce()/announceFailure() — map motion is never announced
   // in live regions. Every entry point no-ops gracefully when
   // assets/layout.json or the farmhouse DOM is missing or in an old format.
   // Under prefers-reduced-motion, the «Анимация» pause toggle, or history
@@ -1119,6 +1993,7 @@
       if (!Object.prototype.hasOwnProperty.call(actors, id)) continue;
       if (actors[id].bobbing) bobAt(actors[id], true);
     }
+    startHelperBob(); // no-op unless helpers are visible and motion allowed
   }
 
   // ---- the shared paper ----
@@ -1305,6 +2180,150 @@
     if (sparkle) sparkle.hidden = true;
   }
 
+  // ---- helpers: subagent sprites in the Теплица (living/QA) ----
+  // Decorative «помощники»: while the active task sits in the greenhouse
+  // with N subagents (the «N субагентов» SSE message, the task's stored
+  // config, or the global settings), min(N,4) .helper sprites appear at the
+  // layout.json helpers anchor and work-bob. They hide on zone exit and on
+  // task end. Everything is aria-hidden inside .farmhouse and the bob is
+  // fully gated by prefers-reduced-motion and the «Анимация» pause.
+
+  const HELPER_MAX = 4;
+  const HELPER_SPACING = 30;  // viewBox units between helper sprites
+  const HELPER_RAISE_PCT = 9; // helpers float on a row above the seat lane
+  const HELPER_SPRITES = [
+    "assets/char-cleaner-b.svg",
+    "assets/char-editor-b.svg",
+    "assets/char-validator-b.svg",
+    "assets/char-scraper-b.svg",
+  ];
+
+  const helperEls = [];
+  let helpersShown = 0;
+  let helperBobTimer = null;
+  let helperBobUp = false;
+
+  function helpersAnchorX() {
+    if (!charLayout) return null;
+    if (charLayout.anchors && charLayout.anchors.helpers != null) {
+      return charLayout.anchors.helpers;
+    }
+    return anchorViewX("living"); // fallback: the greenhouse room anchor
+  }
+
+  function ensureHelperEls() {
+    const farm = farmEl();
+    if (!farm) return false;
+    while (helperEls.length < HELPER_MAX) {
+      const img = document.createElement("img");
+      img.className = "helper";
+      img.src = HELPER_SPRITES[helperEls.length % HELPER_SPRITES.length];
+      img.alt = "";
+      img.setAttribute("aria-hidden", "true");
+      img.hidden = true;
+      img.style.position = "absolute";
+      img.style.left = "0px";
+      img.style.bottom = (bottomPct(laneY()) + HELPER_RAISE_PCT) + "%";
+      img.style.width = "3.4%";
+      img.style.zIndex = "6";
+      img.style.pointerEvents = "none";
+      farm.appendChild(img);
+      helperEls.push(img);
+    }
+    return true;
+  }
+
+  function paintHelpers() {
+    if (helpersShown <= 0) return;
+    const base = helpersAnchorX();
+    if (base == null) return;
+    for (let i = 0; i < helperEls.length; i++) {
+      const el = helperEls[i];
+      if (el.hidden) continue;
+      const x = base + (i - (helpersShown - 1) / 2) * HELPER_SPACING;
+      const px = pxForViewX(x, el);
+      if (px == null) continue;
+      // alternate bob phase per sprite so the crew does not pump in unison
+      const bob = helperBobUp === (i % 2 === 0) ? -BOB_PX : 0;
+      el.style.transform = "translateX(" + Math.round(px) + "px) translateY(" + bob + "px)";
+    }
+  }
+
+  function startHelperBob() {
+    stopHelperBob();
+    if (helpersShown <= 0) return;
+    if (!animEnabled || reducedMotion()) return; // both gates cover the bob
+    helperBobTimer = setInterval(function () {
+      helperBobUp = !helperBobUp;
+      paintHelpers();
+    }, BOB_MS);
+  }
+
+  function stopHelperBob() {
+    if (helperBobTimer) { clearInterval(helperBobTimer); helperBobTimer = null; }
+    if (helperBobUp) { helperBobUp = false; paintHelpers(); }
+  }
+
+  function showHelpers(count) {
+    const n = Math.min(HELPER_MAX, Math.max(0, count | 0));
+    if (n <= 0 || !charLayout || !ensureHelperEls()) { hideHelpers(); return; }
+    helpersShown = n;
+    for (let i = 0; i < helperEls.length; i++) helperEls[i].hidden = i >= n;
+    paintHelpers();
+    startHelperBob();
+  }
+
+  function hideHelpers() {
+    helpersShown = 0;
+    stopHelperBob();
+    for (const el of helperEls) el.hidden = true;
+  }
+
+  // N: «N субагентов» in the event message wins; else the task's stored
+  // config from /api/tasks; else the global settings (Клауд only — Кодекс
+  // has no subagents).
+  function resolveHelperCount(ev) {
+    const m = typeof ev.message === "string" ? ev.message.match(/(\d+)\s*субагент/i) : null;
+    if (m) return Promise.resolve(parseInt(m[1], 10) || 0);
+    const fallback = currentSettings.engine === "claude"
+      ? currentSettings.claude.subagents.count
+      : 0;
+    if (ev.taskId == null) return Promise.resolve(fallback);
+    return fetch("/api/tasks")
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        const tasks = data && Array.isArray(data.tasks) ? data.tasks : [];
+        const task = tasks.find(function (t) { return t && t.id === ev.taskId; });
+        const cfg = task && task.config && typeof task.config === "object" ? task.config : null;
+        if (!cfg) return fallback;
+        if (cfg.engine === "codex") return 0;
+        const sub = cfg.subagents && typeof cfg.subagents === "object" ? cfg.subagents : null;
+        const n = sub ? parseInt(sub.count, 10) : NaN;
+        return isFinite(n) ? n : fallback;
+      })
+      .catch(function () { return fallback; });
+  }
+
+  // SSE hook (server time, never queued — visibility is state, not motion):
+  // entering the Теплица shows the crew, any other zone or task end hides it.
+  function updateHelpersForEvent(ev) {
+    if (!ev || typeof ev.type !== "string" || !farmEl()) return;
+    if (ev.type === "zone.enter") {
+      if (ev.zone !== "living") { hideHelpers(); return; }
+      resolveHelperCount(ev).then(function (n) {
+        // the task may have left the greenhouse while the count was fetched
+        if (currentZoneId === "living") showHelpers(n);
+      });
+      return;
+    }
+    if (ev.type === "task.done" || ev.type === "task.failed" || ev.type === "task.created") {
+      hideHelpers();
+    }
+  }
+
   // ---- global flush (pause toggle / reduced-motion change) ----
 
   function flushAllMotion() {
@@ -1314,6 +2333,7 @@
       paintActor(actors[id], 0);
     }
     suspendBobs();
+    stopHelperBob(); // helpers freeze in place; visibility is unchanged
     if (paperEl && !paperEl.hidden && paperX != null) paintPaperAt(paperX, 0);
   }
 
@@ -1323,6 +2343,7 @@
       paintActor(actors[id], 0);
     }
     if (paperEl && !paperEl.hidden && paperX != null) paintPaperAt(paperX, 0);
+    paintHelpers();
     const farm = farmEl();
     if (!farm) return;
     const bubble = farm.querySelector(".error-bubble");
@@ -1547,9 +2568,9 @@
     }
   }
 
-  // tester.bounce: static "!" bubble for a beat (the feed already carries
-  // the message — nothing is announced), then the same collect-by-boss; the
-  // following zone.enter walks the boss back to the previous room.
+  // tester.bounce: static "!" bubble for a beat (the board card already
+  // carries the message — nothing is announced here), then the same
+  // collect-by-boss; the following zone.enter walks the boss back.
   async function choreoTesterBounce(zoneId) {
     const crew = zoneCrew(zoneId);
     if (crew && crew.driver && crew.driver.actor) bobAt(crew.driver.actor, false);
@@ -1761,17 +2782,20 @@
     resetZones();
     ensureStages();
     setSound(readSoundPref(), false);
-    applySpeed();
-    if (els.speed) els.speed.addEventListener("change", applySpeed);
+    applyAnimDuration();
     if (typeof reducedMotionQuery.addEventListener === "function") {
-      reducedMotionQuery.addEventListener("change", applySpeed);
+      reducedMotionQuery.addEventListener("change", applyAnimDuration);
     }
+    initViewSwitcher();
+    initTaskForm();
+    initEngineUi();
     // Park the token in the first zone once layout is ready.
     requestAnimationFrame(function () {
       moveToken(ZONES[0].id, true);
     });
     initCharacterEngine();
     connect();
+    fetchBoard(); // first paint sets the diff baseline silently (restored tasks)
   }
 
   if (document.readyState === "loading") {

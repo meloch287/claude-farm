@@ -7,20 +7,20 @@
   <title>Клауд Ферма — Урожайная долина</title>
   <link rel="icon" href="favicon.ico" sizes="16x16">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=6">
-  <script src="app.js?v=5" defer></script>
+  <link rel="stylesheet" href="style.css?v=11">
+  <script src="app.js?v=7" defer></script>
 </head>
 <body>
-  <a class="skip-link" href="#map">Перейти к карте дома</a>
+  <a class="skip-link" href="#map">Перейти к карте фермы</a>
 
   <header class="site-header">
     <h1>Клауд Ферма</h1>
-    <p class="tagline">Урожайная долина — конвейер задач в пиксельном доме</p>
+    <p class="tagline">Урожайная долина — конвейер задач на пиксельной ферме</p>
 
     <ol id="stages" class="clothesline" aria-label="Этапы пайплайна">
       <li class="stage" data-zone="kitchen">
         <span class="stage-marker" aria-hidden="true">·</span>
-        <span class="stage-name">Сборка</span>
+        <span class="stage-name">Сбор</span>
       </li>
       <li class="stage" data-zone="corridor">
         <span class="stage-marker" aria-hidden="true">·</span>
@@ -37,117 +37,248 @@
     </ol>
 
     <section class="controls" aria-label="Управление фермой">
-      <button id="btn-demo" type="button">Запустить демо</button>
+      <button id="view-farm-btn" type="button" aria-pressed="true">Ферма</button>
+      <button id="view-board-btn" type="button" aria-pressed="false">Доска</button>
       <button id="btn-sound" type="button" aria-pressed="false">
         Звук <span class="sound-indicator" aria-hidden="true">выкл</span>
       </button>
       <button id="btn-anim" type="button" aria-pressed="true">Анимация</button>
-      <span class="speed-control">
-        <label for="speed">Скорость</label>
-        <select id="speed">
-          <option value="0.5">Медленная</option>
-          <option value="1" selected>Обычная</option>
-          <option value="2">Быстрая</option>
-        </select>
-      </span>
+      <button id="btn-settings" type="button" aria-label="Настройки" aria-haspopup="dialog">
+        <svg class="gear-icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16" width="16" height="16">
+          <path fill="currentColor" d="M7 0h2v2.2a5.9 5.9 0 0 1 1.8.74L12.36 1.4l1.42 1.42-1.54 1.54c.33.55.58 1.15.74 1.8H15.2v2h-2.22a5.9 5.9 0 0 1-.74 1.8l1.54 1.55-1.42 1.41-1.55-1.54a5.9 5.9 0 0 1-1.8.74V14.8H7v-2.22a5.9 5.9 0 0 1-1.8-.74l-1.55 1.54-1.41-1.41 1.54-1.55a5.9 5.9 0 0 1-.74-1.8H.8v-2h2.22c.16-.65.41-1.25.74-1.8L2.22 3.28 3.64 1.86 5.2 3.4A5.9 5.9 0 0 1 7 2.66V0zm1 5.4A2.6 2.6 0 1 0 8 10.6 2.6 2.6 0 0 0 8 5.4z"/>
+        </svg>
+      </button>
     </section>
   </header>
 
   <main id="map" class="house" tabindex="-1">
-    <div class="farmhouse" aria-hidden="true">
-      <img class="scene" src="assets/map-scene.svg" alt="">
-      <img class="worker" data-worker="scraper" data-frame-a="assets/char-scraper-a.svg" data-frame-b="assets/char-scraper-b.svg" data-frame-sit="assets/char-scraper-sit.svg" src="assets/char-scraper-a.svg" alt="" style="left: 18.96%; bottom: 22.22%;">
-      <img class="worker" data-worker="cleaner" data-frame-a="assets/char-cleaner-a.svg" data-frame-b="assets/char-cleaner-b.svg" data-frame-sit="assets/char-cleaner-sit.svg" src="assets/char-cleaner-a.svg" alt="" style="left: 30.42%; bottom: 22.22%;">
-      <img class="worker" data-worker="editor" data-frame-a="assets/char-editor-a.svg" data-frame-b="assets/char-editor-b.svg" data-frame-sit="assets/char-editor-sit.svg" src="assets/char-editor-a.svg" alt="" style="left: 39.79%; bottom: 22.22%;">
-      <img class="worker" data-worker="validator" data-frame-a="assets/char-validator-a.svg" data-frame-b="assets/char-validator-b.svg" data-frame-sit="assets/char-validator-sit.svg" src="assets/char-validator-a.svg" alt="" style="left: 51.25%; bottom: 22.22%;">
-      <img class="worker" data-worker="runner" data-frame-a="assets/char-runner-a.svg" data-frame-b="assets/char-runner-b.svg" data-frame-sit="assets/char-runner-sit.svg" src="assets/char-runner-a.svg" alt="" style="left: 60.63%; bottom: 22.22%;">
-      <img class="worker" data-worker="sniffer" data-frame-a="assets/char-sniffer-a.svg" data-frame-b="assets/char-sniffer-b.svg" data-frame-sit="assets/char-sniffer-sit.svg" src="assets/char-sniffer-a.svg" alt="" style="left: 72.08%; bottom: 22.22%;">
-      <img class="worker" data-worker="archiver" data-frame-a="assets/char-archiver-a.svg" data-frame-b="assets/char-archiver-b.svg" data-frame-sit="assets/char-archiver-sit.svg" src="assets/char-archiver-a.svg" alt="" style="left: 81.46%; bottom: 22.22%;">
-      <img class="worker" data-worker="signoff" data-frame-a="assets/char-signoff-a.svg" data-frame-b="assets/char-signoff-b.svg" data-frame-sit="assets/char-signoff-sit.svg" src="assets/char-signoff-a.svg" alt="" style="left: 93.96%; bottom: 22.22%;">
-      <div id="boss" class="boss" style="left: 6.09%; bottom: 19.26%;">
-        <img class="boss-sprite" data-frame-a="assets/char-boss-a.svg" data-frame-b="assets/char-boss-b.svg" data-frame-sit="assets/char-boss-sit.svg" src="assets/char-boss-a.svg" alt="">
-        <img class="parcel" src="assets/item-parcel.svg" alt="">
-      </div>
-      <img id="paper" class="paper" src="assets/item-paper.svg" alt="" hidden>
-    </div>
+    <section id="farm-view" aria-labelledby="farm-view-title">
+      <h2 id="farm-view-title">Ферма — карта</h2>
 
-    <section class="zone" data-zone="kitchen" data-state="idle" aria-labelledby="zone-kitchen-title">
-      <h2 id="zone-kitchen-title">Кухня — Сборка</h2>
-      <p class="zone-state">
-        <span class="zone-state-glyph" aria-hidden="true">·</span>
-        <span class="zone-state-text">Ожидание</span>
-      </p>
-      <div class="crew">
-        <div class="card card-driver">
-          <img class="portrait" src="assets/char-scraper-portrait.svg" alt="" aria-hidden="true">
-          <p class="card-role">Драйвер</p>
-          <p class="card-name">The Scraper</p>
+      <div class="farmhouse" aria-hidden="true">
+        <img class="scene" src="assets/map-scene.svg" alt="">
+        <div class="room-sign" style="left: 7.29%; top: 15.56%;">Фермерский дом</div>
+        <div class="room-sign" style="left: 25.52%; top: 15.56%;">Поле</div>
+        <div class="room-sign" style="left: 46.35%; top: 15.56%;">Амбар</div>
+        <div class="room-sign" style="left: 67.19%; top: 15.56%;">Теплица</div>
+        <div class="room-sign" style="left: 89.06%; top: 15.56%;">Рынок</div>
+        <img class="worker" data-worker="scraper" data-frame-a="assets/char-scraper-a.svg" data-frame-b="assets/char-scraper-b.svg" data-frame-sit="assets/char-scraper-sit.svg" src="assets/char-scraper-a.svg" alt="" style="left: 18.96%; bottom: 22.22%;">
+        <img class="worker" data-worker="cleaner" data-frame-a="assets/char-cleaner-a.svg" data-frame-b="assets/char-cleaner-b.svg" data-frame-sit="assets/char-cleaner-sit.svg" src="assets/char-cleaner-a.svg" alt="" style="left: 30.42%; bottom: 22.22%;">
+        <img class="worker" data-worker="editor" data-frame-a="assets/char-editor-a.svg" data-frame-b="assets/char-editor-b.svg" data-frame-sit="assets/char-editor-sit.svg" src="assets/char-editor-a.svg" alt="" style="left: 39.79%; bottom: 22.22%;">
+        <img class="worker" data-worker="validator" data-frame-a="assets/char-validator-a.svg" data-frame-b="assets/char-validator-b.svg" data-frame-sit="assets/char-validator-sit.svg" src="assets/char-validator-a.svg" alt="" style="left: 51.25%; bottom: 22.22%;">
+        <img class="worker" data-worker="runner" data-frame-a="assets/char-runner-a.svg" data-frame-b="assets/char-runner-b.svg" data-frame-sit="assets/char-runner-sit.svg" src="assets/char-runner-a.svg" alt="" style="left: 60.63%; bottom: 22.22%;">
+        <img class="worker" data-worker="sniffer" data-frame-a="assets/char-sniffer-a.svg" data-frame-b="assets/char-sniffer-b.svg" data-frame-sit="assets/char-sniffer-sit.svg" src="assets/char-sniffer-a.svg" alt="" style="left: 72.08%; bottom: 22.22%;">
+        <img class="worker" data-worker="archiver" data-frame-a="assets/char-archiver-a.svg" data-frame-b="assets/char-archiver-b.svg" data-frame-sit="assets/char-archiver-sit.svg" src="assets/char-archiver-a.svg" alt="" style="left: 81.46%; bottom: 22.22%;">
+        <img class="worker" data-worker="signoff" data-frame-a="assets/char-signoff-a.svg" data-frame-b="assets/char-signoff-b.svg" data-frame-sit="assets/char-signoff-sit.svg" src="assets/char-signoff-a.svg" alt="" style="left: 93.96%; bottom: 22.22%;">
+        <div id="boss" class="boss" style="left: 6.09%; bottom: 19.26%;">
+          <img class="boss-sprite" data-frame-a="assets/char-boss-a.svg" data-frame-b="assets/char-boss-b.svg" data-frame-sit="assets/char-boss-sit.svg" src="assets/char-boss-a.svg" alt="">
+          <img class="parcel" src="assets/item-parcel.svg" alt="">
         </div>
-        <div class="card card-tester">
-          <img class="portrait" src="assets/char-cleaner-portrait.svg" alt="" aria-hidden="true">
-          <p class="card-role">Тестер</p>
-          <p class="card-name">The Cleaner</p>
-        </div>
+        <img id="paper" class="paper" src="assets/item-paper.svg" alt="" hidden>
       </div>
+
+      <section class="zone" data-zone="kitchen" data-state="idle" aria-labelledby="zone-kitchen-title">
+        <h2 id="zone-kitchen-title">Поле — Сбор</h2>
+        <p class="zone-state">
+          <span class="zone-state-glyph" aria-hidden="true">·</span>
+          <span class="zone-state-text">Ожидание</span>
+        </p>
+        <div class="crew">
+          <div class="card card-driver">
+            <img class="portrait" src="assets/char-scraper-portrait.svg" alt="" aria-hidden="true">
+            <p class="card-role">Драйвер</p>
+            <p class="card-name">The Scraper</p>
+          </div>
+          <div class="card card-tester">
+            <img class="portrait" src="assets/char-cleaner-portrait.svg" alt="" aria-hidden="true">
+            <p class="card-role">Тестер</p>
+            <p class="card-name">The Cleaner</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="zone" data-zone="corridor" data-state="idle" aria-labelledby="zone-corridor-title">
+        <h2 id="zone-corridor-title">Амбар — Обработка</h2>
+        <p class="zone-state">
+          <span class="zone-state-glyph" aria-hidden="true">·</span>
+          <span class="zone-state-text">Ожидание</span>
+        </p>
+        <div class="crew">
+          <div class="card card-driver">
+            <img class="portrait" src="assets/char-editor-portrait.svg" alt="" aria-hidden="true">
+            <p class="card-role">Драйвер</p>
+            <p class="card-name">The Editor</p>
+          </div>
+          <div class="card card-tester">
+            <img class="portrait" src="assets/char-validator-portrait.svg" alt="" aria-hidden="true">
+            <p class="card-role">Тестер</p>
+            <p class="card-name">The Validator</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="zone" data-zone="living" data-state="idle" aria-labelledby="zone-living-title">
+        <h2 id="zone-living-title">Теплица — QA</h2>
+        <p class="zone-state">
+          <span class="zone-state-glyph" aria-hidden="true">·</span>
+          <span class="zone-state-text">Ожидание</span>
+        </p>
+        <div class="crew">
+          <div class="card card-driver">
+            <img class="portrait" src="assets/char-runner-portrait.svg" alt="" aria-hidden="true">
+            <p class="card-role">Драйвер</p>
+            <p class="card-name">The Runner</p>
+          </div>
+          <div class="card card-tester">
+            <img class="portrait" src="assets/char-sniffer-portrait.svg" alt="" aria-hidden="true">
+            <p class="card-role">Тестер</p>
+            <p class="card-name">The Sniffer</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="zone" data-zone="bath" data-state="idle" aria-labelledby="zone-bath-title">
+        <h2 id="zone-bath-title">Рынок — Релиз</h2>
+        <p class="zone-state">
+          <span class="zone-state-glyph" aria-hidden="true">·</span>
+          <span class="zone-state-text">Ожидание</span>
+        </p>
+        <div class="crew">
+          <div class="card card-driver">
+            <img class="portrait" src="assets/char-archiver-portrait.svg" alt="" aria-hidden="true">
+            <p class="card-role">Драйвер</p>
+            <p class="card-name">The Archiver</p>
+          </div>
+          <div class="card card-tester">
+            <img class="portrait" src="assets/char-signoff-portrait.svg" alt="" aria-hidden="true">
+            <p class="card-role">Тестер</p>
+            <p class="card-name">The Sign-Off</p>
+          </div>
+        </div>
+      </section>
     </section>
 
-    <section class="zone" data-zone="corridor" data-state="idle" aria-labelledby="zone-corridor-title">
-      <h2 id="zone-corridor-title">Коридор — Обработка</h2>
-      <p class="zone-state">
-        <span class="zone-state-glyph" aria-hidden="true">·</span>
-        <span class="zone-state-text">Ожидание</span>
-      </p>
-      <div class="crew">
-        <div class="card card-driver">
-          <img class="portrait" src="assets/char-editor-portrait.svg" alt="" aria-hidden="true">
-          <p class="card-role">Драйвер</p>
-          <p class="card-name">The Editor</p>
-        </div>
-        <div class="card card-tester">
-          <img class="portrait" src="assets/char-validator-portrait.svg" alt="" aria-hidden="true">
-          <p class="card-role">Тестер</p>
-          <p class="card-name">The Validator</p>
-        </div>
-      </div>
-    </section>
+    <section id="board-view" hidden aria-labelledby="board-view-title">
+      <h2 id="board-view-title">Доска задач</h2>
 
-    <section class="zone" data-zone="living" data-state="idle" aria-labelledby="zone-living-title">
-      <h2 id="zone-living-title">Гостиная — QA</h2>
-      <p class="zone-state">
-        <span class="zone-state-glyph" aria-hidden="true">·</span>
-        <span class="zone-state-text">Ожидание</span>
-      </p>
-      <div class="crew">
-        <div class="card card-driver">
-          <img class="portrait" src="assets/char-runner-portrait.svg" alt="" aria-hidden="true">
-          <p class="card-role">Драйвер</p>
-          <p class="card-name">The Runner</p>
+      <form id="task-form" novalidate>
+        <div class="form-field">
+          <label for="task-title">Название</label>
+          <input id="task-title" name="title" type="text" required autocomplete="off">
+          <p id="err-title" class="field-error" hidden></p>
         </div>
-        <div class="card card-tester">
-          <img class="portrait" src="assets/char-sniffer-portrait.svg" alt="" aria-hidden="true">
-          <p class="card-role">Тестер</p>
-          <p class="card-name">The Sniffer</p>
+        <div class="form-field">
+          <label for="task-input">Данные задачи (по строке на элемент)</label>
+          <textarea id="task-input" name="input" rows="4"></textarea>
         </div>
-      </div>
-    </section>
 
-    <section class="zone" data-zone="bath" data-state="idle" aria-labelledby="zone-bath-title">
-      <h2 id="zone-bath-title">Ванная — Релиз</h2>
-      <p class="zone-state">
-        <span class="zone-state-glyph" aria-hidden="true">·</span>
-        <span class="zone-state-text">Ожидание</span>
-      </p>
-      <div class="crew">
-        <div class="card card-driver">
-          <img class="portrait" src="assets/char-archiver-portrait.svg" alt="" aria-hidden="true">
-          <p class="card-role">Драйвер</p>
-          <p class="card-name">The Archiver</p>
+        <details id="task-config">
+          <summary>Настройки задачи</summary>
+          <div class="config-body">
+            <fieldset class="engine-picker">
+              <legend>Движок</legend>
+              <label class="choice"><input type="radio" name="cfg-engine" value="claude" checked> Клауд</label>
+              <label class="choice"><input type="radio" name="cfg-engine" value="codex"> Кодекс</label>
+            </fieldset>
+
+            <fieldset id="cfg-claude-fieldset" data-engine-panel="claude">
+              <legend>Клауд</legend>
+              <div class="config-fields">
+                <div class="form-field">
+                  <label for="cfg-model">Модель задач</label>
+                  <select id="cfg-model" name="cfg-model">
+                    <option value="claude-opus-4-8" selected>Клауд 4.8</option>
+                    <option value="claude-sonnet-4-6">Соннет 4.6</option>
+                    <option value="claude-haiku-4-5-20251001">Хайку 4.5</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label for="cfg-mode">Режим</label>
+                  <select id="cfg-mode" name="cfg-mode">
+                    <option value="ultracode" selected>Ультракод</option>
+                    <option value="normal">Обычный</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label for="cfg-sub-model">Модель субагентов</label>
+                  <select id="cfg-sub-model" name="cfg-sub-model">
+                    <option value="claude-opus-4-8">Клауд 4.8</option>
+                    <option value="claude-sonnet-4-6" selected>Соннет 4.6</option>
+                    <option value="claude-haiku-4-5-20251001">Хайку 4.5</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label for="cfg-sub-count">Субагентов</label>
+                  <input id="cfg-sub-count" name="cfg-sub-count" type="number" min="0" max="8" value="3">
+                </div>
+              </div>
+              <fieldset class="subtype-picker">
+                <legend>Типы субагентов</legend>
+                <label class="choice"><input type="checkbox" name="cfg-sub-type" value="review" checked> Ревью</label>
+                <label class="choice"><input type="checkbox" name="cfg-sub-type" value="bugs" checked> Поиск ошибок</label>
+                <label class="choice"><input type="checkbox" name="cfg-sub-type" value="optimize"> Оптимизация</label>
+                <label class="choice"><input type="checkbox" name="cfg-sub-type" value="factcheck"> Факт-чекинг</label>
+              </fieldset>
+            </fieldset>
+
+            <fieldset id="cfg-codex-fieldset" data-engine-panel="codex" hidden>
+              <legend>Кодекс</legend>
+              <div class="config-fields">
+                <div class="form-field">
+                  <label for="cfg-codex-model">Модель</label>
+                  <select id="cfg-codex-model" name="cfg-codex-model">
+                    <option value="gpt-5.5" selected>GPT-5.5</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label for="cfg-codex-speed">Скорость</label>
+                  <select id="cfg-codex-speed" name="cfg-codex-speed">
+                    <option value="normal" selected>Обычная</option>
+                    <option value="faster">Фастер</option>
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+        </details>
+
+        <div class="form-actions">
+          <button type="submit" name="mode" value="simple">Создать задачу</button>
+          <button type="submit" name="mode" value="ai">Создать задачу ИИ</button>
         </div>
-        <div class="card card-tester">
-          <img class="portrait" src="assets/char-signoff-portrait.svg" alt="" aria-hidden="true">
-          <p class="card-role">Тестер</p>
-          <p class="card-name">The Sign-Off</p>
-        </div>
+      </form>
+
+      <div id="epics" class="epics"></div>
+
+      <!-- Карточки рендерит app.js. Контракт DOM карточки: заголовок -> бейджи -> статус.
+           Бейджи-чипы (неинтерактивные <span>): span.card-badge.badge-model («Клауд 4.8» /
+           «Соннет 4.6» / «Хайку 4.5» / «GPT-5.5»), span.card-badge.badge-mode («Ультракод» /
+           «Обычный» / «Фастер»), плюс существующий span.badge-ai. CSS-классы готовы в style.css. -->
+      <div class="board">
+        <section class="board-col" data-col="queue">
+          <h3 id="col-queue">Очередь&nbsp;<span class="col-count">(0)</span></h3>
+          <ul aria-labelledby="col-queue"></ul>
+        </section>
+        <section class="board-col" data-col="kitchen">
+          <h3 id="col-kitchen">Сбор&nbsp;<span class="col-count">(0)</span></h3>
+          <ul aria-labelledby="col-kitchen"></ul>
+        </section>
+        <section class="board-col" data-col="corridor">
+          <h3 id="col-corridor">Обработка&nbsp;<span class="col-count">(0)</span></h3>
+          <ul aria-labelledby="col-corridor"></ul>
+        </section>
+        <section class="board-col" data-col="living">
+          <h3 id="col-living">QA&nbsp;<span class="col-count">(0)</span></h3>
+          <ul aria-labelledby="col-living"></ul>
+        </section>
+        <section class="board-col" data-col="bath">
+          <h3 id="col-bath">Релиз&nbsp;<span class="col-count">(0)</span></h3>
+          <ul aria-labelledby="col-bath"></ul>
+        </section>
+        <section class="board-col" data-col="done">
+          <h3 id="col-done">Готово&nbsp;<span class="col-count">(0)</span></h3>
+          <ul aria-labelledby="col-done"></ul>
+        </section>
       </div>
     </section>
 
@@ -156,11 +287,98 @@
     <div id="status" class="status-bar" role="status"></div>
   </main>
 
-  <section class="feed-panel" aria-label="Лента событий">
-    <h2>Лента событий</h2>
-    <div class="feed-log" role="log" aria-label="Журнал событий" tabindex="0">
-      <ul id="feed"></ul>
+  <!-- Онбординг: app.js вызывает showModal() только при первом визите
+       (localStorage farm.engineChosen); Escape разрешён — по cancel движок
+       по умолчанию Клауд + анонс в #status. -->
+  <dialog id="onboarding-dialog" aria-labelledby="onboarding-title">
+    <h2 id="onboarding-title">Какой движок использовать?</h2>
+    <div class="onboarding-choices">
+      <div class="onboarding-choice">
+        <button id="onboarding-claude" type="button" autofocus aria-describedby="onboarding-claude-desc">Клауд</button>
+        <p id="onboarding-claude-desc">Модели Клауд: режим Ультракод и команда субагентов.</p>
+      </div>
+      <div class="onboarding-choice">
+        <button id="onboarding-codex" type="button" aria-describedby="onboarding-codex-desc">Кодекс</button>
+        <p id="onboarding-codex-desc">Модель GPT-5.5 с выбором скорости работы.</p>
+      </div>
     </div>
-  </section>
+  </dialog>
+
+  <!-- Настройки: app.js открывает по #btn-settings; неактивный фрейм движка
+       получает атрибут hidden (не disabled); Сохранить -> PUT /api/settings. -->
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <h2 id="settings-title">Настройки</h2>
+    <form id="settings-form" method="dialog">
+      <fieldset class="engine-picker">
+        <legend>Движок</legend>
+        <label class="choice"><input type="radio" name="set-engine" value="claude" checked> Клауд</label>
+        <label class="choice"><input type="radio" name="set-engine" value="codex"> Кодекс</label>
+      </fieldset>
+
+      <fieldset id="set-claude-fieldset" data-engine-panel="claude">
+        <legend>Клауд</legend>
+        <div class="config-fields">
+          <div class="form-field">
+            <label for="set-model">Модель задач</label>
+            <select id="set-model" name="set-model">
+              <option value="claude-opus-4-8" selected>Клауд 4.8</option>
+              <option value="claude-sonnet-4-6">Соннет 4.6</option>
+              <option value="claude-haiku-4-5-20251001">Хайку 4.5</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="set-mode">Режим</label>
+            <select id="set-mode" name="set-mode">
+              <option value="ultracode" selected>Ультракод</option>
+              <option value="normal">Обычный</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="set-sub-model">Модель субагентов</label>
+            <select id="set-sub-model" name="set-sub-model">
+              <option value="claude-opus-4-8">Клауд 4.8</option>
+              <option value="claude-sonnet-4-6" selected>Соннет 4.6</option>
+              <option value="claude-haiku-4-5-20251001">Хайку 4.5</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="set-sub-count">Субагентов</label>
+            <input id="set-sub-count" name="set-sub-count" type="number" min="0" max="8" value="3">
+          </div>
+        </div>
+        <fieldset class="subtype-picker">
+          <legend>Типы субагентов</legend>
+          <label class="choice"><input type="checkbox" name="set-sub-type" value="review" checked> Ревью</label>
+          <label class="choice"><input type="checkbox" name="set-sub-type" value="bugs" checked> Поиск ошибок</label>
+          <label class="choice"><input type="checkbox" name="set-sub-type" value="optimize"> Оптимизация</label>
+          <label class="choice"><input type="checkbox" name="set-sub-type" value="factcheck"> Факт-чекинг</label>
+        </fieldset>
+      </fieldset>
+
+      <fieldset id="set-codex-fieldset" data-engine-panel="codex" hidden>
+        <legend>Кодекс</legend>
+        <div class="config-fields">
+          <div class="form-field">
+            <label for="set-codex-model">Модель</label>
+            <select id="set-codex-model" name="set-codex-model">
+              <option value="gpt-5.5" selected>GPT-5.5</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="set-codex-speed">Скорость</label>
+            <select id="set-codex-speed" name="set-codex-speed">
+              <option value="normal" selected>Обычная</option>
+              <option value="faster">Фастер</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="dialog-actions">
+        <button type="submit" value="save">Сохранить</button>
+        <button type="submit" value="cancel" formnovalidate>Отмена</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

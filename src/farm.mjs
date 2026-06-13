@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // CLI entry for "Клауд Ферма".
-// Commands: demo | serve [--port N] | run "<title>" --input <file> [--real]
+// Commands: demo | serve [--port N] [--no-open] | run "<title>" --input <file> [--real]
 // Project root is resolved relative to import.meta.url, so the CLI works
 // from any cwd.
 
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -23,28 +24,36 @@ const DEFAULT_CONFIG = {
   maxAttempts: 3,
   model: 'claude-haiku-4-5-20251001',
   outputDir: 'output',
+  claudeModels: [
+    { id: 'claude-opus-4-8', label: 'Клауд 4.8' },
+    { id: 'claude-sonnet-4-6', label: 'Соннет 4.6' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Хайку 4.5' },
+  ],
+  codexModels: [
+    { id: 'gpt-5.5', label: 'GPT-5.5' },
+  ],
   zones: [
     {
       id: 'kitchen',
-      title: 'Кухня — Сборка',
+      title: 'Поле — Сбор',
       driver: { id: 'scraper', name: 'The Scraper' },
       tester: { id: 'cleaner', name: 'The Cleaner' },
     },
     {
       id: 'corridor',
-      title: 'Коридор — Обработка',
+      title: 'Амбар — Обработка',
       driver: { id: 'editor', name: 'The Editor' },
       tester: { id: 'validator', name: 'The Validator' },
     },
     {
       id: 'living',
-      title: 'Гостиная — QA',
+      title: 'Теплица — QA',
       driver: { id: 'runner', name: 'The Runner' },
       tester: { id: 'sniffer', name: 'The Sniffer' },
     },
     {
       id: 'bath',
-      title: 'Ванная — Релиз',
+      title: 'Рынок — Релиз',
       driver: { id: 'archiver', name: 'The Archiver' },
       tester: { id: 'signoff', name: 'The Sign-Off' },
     },
@@ -81,13 +90,13 @@ function makeNarrator(config) {
   };
 }
 
-async function runThroughFarm({ config, title, input, runners, stepDelayMs }) {
+async function runThroughFarm({ config, title, input, runners, stepDelayMs, resultFile = 'result.csv' }) {
   const bus = createEventBus();
   bus.subscribe(makeNarrator(config));
   const farm = createFarm({ ...config, stepDelayMs }, runners, bus);
   const result = await farm.runTask({ title, input });
   if (result.ok) {
-    console.log(`Результат: ${path.join(config.outputDir, result.task.id, 'result.csv')}`);
+    console.log(`Результат: ${path.join(config.outputDir, result.task.id, resultFile)}`);
     console.log('Задача закрыта');
   } else {
     console.error('Задача провалена: попытки закончились');
@@ -130,8 +139,22 @@ async function cmdServe(args) {
 
   try {
     const { port } = await startServer({ config });
-    console.log(`Клауд Ферма открыта: http://localhost:${port}`);
+    const url = `http://localhost:${port}`;
+    console.log(`Клауд Ферма открыта: ${url}`);
     console.log('Остановить сервер: Ctrl+C');
+    // macOS: open the dashboard in Safari automatically (skip with --no-open).
+    if (process.platform === 'darwin' && !args.includes('--no-open')) {
+      try {
+        const opener = spawn('open', ['-a', 'Safari', url], {
+          stdio: 'ignore',
+          detached: true,
+        });
+        opener.on('error', () => {}); // best-effort: a missing `open` never kills the server
+        opener.unref();
+      } catch {
+        // ignore — the URL is already printed above
+      }
+    }
   } catch (err) {
     if (err?.code === 'EADDRINUSE') {
       console.error(
@@ -186,7 +209,14 @@ async function cmdRun(args) {
   if (real) {
     console.log('Режим --real: задачу выполняют настоящие агенты Claude');
   }
-  await runThroughFarm({ config, title, input, runners, stepDelayMs: 0 });
+  await runThroughFarm({
+    config,
+    title,
+    input,
+    runners,
+    stepDelayMs: 0,
+    resultFile: real ? 'result.md' : 'result.csv',
+  });
 }
 
 function printUsage() {
@@ -194,7 +224,7 @@ function printUsage() {
   console.log('');
   console.log('Команды:');
   console.log('  node src/farm.mjs demo                          — прогнать демо-задачу');
-  console.log('  node src/farm.mjs serve [--port N]              — запустить дашборд');
+  console.log('  node src/farm.mjs serve [--port N] [--no-open]  — запустить дашборд (на macOS откроет Safari)');
   console.log('  node src/farm.mjs run "Название" --input <файл> [--real] — выполнить задачу');
 }
 
