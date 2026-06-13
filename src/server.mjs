@@ -9,12 +9,11 @@ import { fileURLToPath } from 'node:url';
 
 import { createEventBus } from './events.mjs';
 import { createFarm } from './orchestrator.mjs';
-import { createSimRunners, createClaudeRunners, createCodexRunners } from './agents.mjs';
+import { createSimRunners, createClaudeRunners } from './agents.mjs';
 import {
   createTaskStore,
   createSettingsStore,
   detectClaudeCli,
-  detectCodexCli,
 } from './tasks.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -76,44 +75,33 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
   // stays within one beat of reality without the catch-up queue compressing it.
   // Tests and the CLI pass their own config and are unaffected.
   const simFarm = createFarm({ ...config, stepDelayMs: 3000 }, createSimRunners(), bus);
-  // Real executors: the claude and codex CLI farms. Minimal pacing — the CLI
-  // calls are the natural delay, and the boss wants real tasks done fast.
+  // Real executor: the claude CLI farm. Minimal pacing — the CLI calls are the
+  // natural delay, and the boss wants real tasks done fast.
   const claudeFarm = createFarm(
     { ...config, stepDelayMs: 300 },
     createClaudeRunners(config),
     bus
   );
-  const codexFarm = createFarm(
-    { ...config, stepDelayMs: 300 },
-    createCodexRunners(config),
-    bus
-  );
 
-  // Probe both CLIs ONCE at boot; the cached results pick the executor per
-  // task and are exposed in /api/state as {claudeExecutor, codexExecutor}.
+  // Probe the claude CLI ONCE at boot; the cached result picks the executor
+  // per task and is exposed in /api/state as {claudeExecutor}.
   let claudeExecutor = false;
   const claudeAvailable = detectClaudeCli().then((ok) => {
     claudeExecutor = ok;
     return ok;
   });
-  let codexExecutor = false;
-  const codexAvailable = detectCodexCli().then((ok) => {
-    codexExecutor = ok;
-    return ok;
-  });
 
-  // Global settings (engine Клауд/Кодекс, models, ultracode subagents),
-  // persisted at output/settings.json.
+  // Global settings (Claude model, ultracode subagents), persisted at
+  // output/settings.json.
   const settings = createSettingsStore({ config });
 
   // Task store: kanban board state + strictly sequential FIFO queue feeding
-  // one farm at a time. Persists/restores output/tasks-state.json.
-  const farms = { sim: simFarm, claude: claudeFarm, codex: codexFarm };
+  // one farm at a time. Persists/restores output/farm-state.json.
+  const farms = { sim: simFarm, claude: claudeFarm };
   const store = createTaskStore({
     bus,
     config,
     claudeAvailable: () => claudeAvailable,
-    codexAvailable: () => codexAvailable,
     getSettings: () => settings.get(),
     runQueueTask: (spec, executor) => (farms[executor] ?? simFarm).runTask(spec),
   });
@@ -167,8 +155,50 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
     const taskConfig = body.config && typeof body.config === 'object' && !Array.isArray(body.config)
       ? body.config
       : undefined;
-    const task = store.createTask({ title, input, mode, config: taskConfig });
-    sendJson(res, 202, { taskId: task.id });
+    const boardId = typeof body.boardId === 'string' ? body.boardId : undefined;
+    const task = store.createTask({ title, input, mode, boardId, config: taskConfig });
+    sendJson(res, 202, { taskId: task.id, boardId: task.boardId });
+  }
+
+  // --- boards API -----------------------------------------------------------
+  // POST /api/boards {name?} -> {board}. PATCH /api/boards/:id {name} -> rename.
+  // DELETE /api/boards/:id -> delete board + its tasks (never zero boards).
+  async function handleCreateBoard(req, res) {
+    let body = {};
+    try {
+      body = JSON.parse((await readBody(req)) || '{}');
+    } catch {
+      sendJson(res, 400, { error: 'Некорректный JSON' });
+      return;
+    }
+    const name = typeof body.name === 'string' ? body.name : undefined;
+    const board = store.createBoard(name);
+    sendJson(res, 201, { board });
+  }
+
+  async function handleRenameBoard(req, res, id) {
+    let body = {};
+    try {
+      body = JSON.parse((await readBody(req)) || '{}');
+    } catch {
+      sendJson(res, 400, { error: 'Некорректный JSON' });
+      return;
+    }
+    const result = store.renameBoard(id, body.name);
+    if (!result.ok) {
+      sendJson(res, result.error === 'Доска не найдена' ? 404 : 400, { error: result.error });
+      return;
+    }
+    sendJson(res, 200, { board: result.board });
+  }
+
+  function handleDeleteBoard(res, id) {
+    const result = store.deleteBoard(id);
+    if (!result.ok) {
+      sendJson(res, 404, { error: result.error });
+      return;
+    }
+    sendJson(res, 200, store.listBoards());
   }
 
   // PUT /api/settings: strict validation, 400 with Russian errors on garbage.
@@ -205,6 +235,7 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
     bus.emit({
       type: event.type,
       taskId: typeof event.taskId === 'string' ? event.taskId : 'external',
+      boardId: typeof event.boardId === 'string' ? event.boardId : undefined,
       zone: typeof event.zone === 'string' ? event.zone : undefined,
       role: typeof event.role === 'string' ? event.role : undefined,
       message: typeof event.message === 'string' ? event.message.slice(0, 500) : '',
@@ -240,12 +271,18 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
 
   const server = http.createServer(async (req, res) => {
     let pathname;
+    let query;
     try {
-      pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+      const url = new URL(req.url, 'http://localhost');
+      pathname = decodeURIComponent(url.pathname);
+      query = url.searchParams;
     } catch {
       sendText(res, 400, 'Некорректный запрос');
       return;
     }
+
+    // /api/boards/:id (PATCH rename, DELETE, POST .../active)
+    const boardMatch = /^\/api\/boards\/([^/]+?)(\/active)?$/.exec(pathname);
 
     try {
       if (req.method === 'GET' && pathname === '/events') {
@@ -256,17 +293,43 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
         sendJson(res, 200, {
           zones: config.zones ?? [],
           claudeExecutor,
-          codexExecutor,
-          engine: settings.get().engine,
           claudeModels: config.claudeModels ?? [],
-          codexModels: config.codexModels ?? [],
           history: bus.history().slice(-100),
         });
         return;
       }
       if (req.method === 'GET' && pathname === '/api/tasks') {
-        sendJson(res, 200, { tasks: store.list() });
+        // ?board=<id> scopes to one board; no param => active board's tasks.
+        const board = query.get('board');
+        const tasks = board ? store.list(board) : store.list(store.listBoards().activeBoardId);
+        sendJson(res, 200, { tasks });
         return;
+      }
+      if (req.method === 'GET' && pathname === '/api/boards') {
+        sendJson(res, 200, store.listBoards());
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/api/boards') {
+        await handleCreateBoard(req, res);
+        return;
+      }
+      if (boardMatch) {
+        const boardId = decodeURIComponent(boardMatch[1]);
+        const isActive = Boolean(boardMatch[2]);
+        if (req.method === 'POST' && isActive) {
+          const result = store.setActiveBoard(boardId);
+          if (!result.ok) sendJson(res, 404, { error: result.error });
+          else sendJson(res, 200, store.listBoards());
+          return;
+        }
+        if (req.method === 'PATCH' && !isActive) {
+          await handleRenameBoard(req, res, boardId);
+          return;
+        }
+        if (req.method === 'DELETE' && !isActive) {
+          handleDeleteBoard(res, boardId);
+          return;
+        }
       }
       if (req.method === 'GET' && pathname === '/api/settings') {
         sendJson(res, 200, settings.get());

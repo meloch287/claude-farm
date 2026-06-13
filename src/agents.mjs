@@ -1,8 +1,7 @@
 // Agents for "Клауд Ферма": sim runners (deterministic, used by tests and
-// the demo) and real CLI runners — claude (`claude -p`) and codex
-// (`codex exec`). The claude path additionally supports the ULTRACODE mode:
-// in the Теплица (living) zone parallel subagents review the result before
-// the Sniffer verdict.
+// the demo) and the real claude CLI runners (`claude -p`). The claude path
+// supports the ULTRACODE mode: in the Теплица (living) zone parallel subagents
+// review the result before the Sniffer verdict.
 //
 // Runners NEVER emit events themselves — the orchestrator does. A driver may
 // return { message } and a tester returns a verdict:
@@ -285,13 +284,12 @@ export function createSimRunners() {
 }
 
 // ---------------------------------------------------------------------------
-// CLI runners — real executors: the Амбар (corridor) Editor actually performs
-// the task via a local CLI (claude or codex), the other roles prepare, verify
-// and package the deliverable. Never spawned by tests.
+// CLI runners — real executor: the Амбар (corridor) Editor actually performs
+// the task via the local claude CLI, the other roles prepare, verify and
+// package the deliverable. Never spawned by tests.
 // ---------------------------------------------------------------------------
 
 const CLAUDE_TIMEOUT_MS = 120_000;
-const CODEX_TIMEOUT_MS = 180_000;
 
 /** Clip long text for prompts. */
 function clip(text, limit = 6000) {
@@ -325,7 +323,7 @@ function parseVerdict(text) {
 }
 
 /**
- * Build a clean environment for spawning the `claude`/`codex` CLIs.
+ * Build a clean environment for spawning the `claude` CLI.
  * When the farm server itself is launched from inside a Claude Code session,
  * it inherits harness variables (CLAUDECODE, CLAUDE_CODE_*, ANTHROPIC_BASE_URL,
  * CLAUDE_CODE_ENTRYPOINT) that put a nested `claude -p` into a "credentials
@@ -407,21 +405,6 @@ function runClaudeCli(prompt, config, model) {
     args.push('--model', effectiveModel);
   }
   return runCliPrompt('claude', args, config?.claudeTimeoutMs ?? CLAUDE_TIMEOUT_MS);
-}
-
-/**
- * `codex exec --model <model> -c model_reasoning_effort=<low|medium> <prompt>`.
- * speed "faster" maps to low reasoning effort, "normal" to medium.
- */
-function runCodexCli(prompt, config, { model, speed } = {}) {
-  const effort = speed === 'faster' ? 'low' : 'medium';
-  const args = [
-    'exec',
-    '--model', model ?? 'gpt-5.5',
-    '-c', `model_reasoning_effort=${effort}`,
-    prompt,
-  ];
-  return runCliPrompt('codex', args, config?.codexTimeoutMs ?? CODEX_TIMEOUT_MS);
 }
 
 // ---------------------------------------------------------------------------
@@ -519,8 +502,7 @@ export function describeSubagentTypes(types) {
 
 /** The task runs ultracode when its claude config says so and the plan is non-empty. */
 function isUltracode(taskConfig) {
-  return taskConfig?.engine !== 'codex'
-    && taskConfig?.mode === 'ultracode'
+  return taskConfig?.mode === 'ultracode'
     && planSubagents(taskConfig?.subagents).length > 0;
 }
 
@@ -535,19 +517,6 @@ export function createClaudeRunners(config) {
     cliLabel: 'claude CLI',
     ask,
     askSubagent,
-  });
-}
-
-export function createCodexRunners(config) {
-  // Codex path: model + speed from the per-task config; NO subagents.
-  const ask = (ctx, prompt) => runCodexCli(prompt, config, {
-    model: ctx.task?.config?.model,
-    speed: ctx.task?.config?.speed,
-  });
-  return createCliRunners(config, {
-    executorName: 'codex',
-    cliLabel: 'codex CLI',
-    ask,
   });
 }
 
@@ -641,7 +610,7 @@ function createCliRunners(config, { executorName, cliLabel, ask, askSubagent }) 
       clearError(ctx, 'living');
       ctx.data.qa = result.text;
 
-      // Ultracode fan-out — claude engine only (codex runners pass no askSubagent).
+      // Ultracode fan-out — only when askSubagent is wired (sim path has none).
       if (askSubagent && isUltracode(ctx.task?.config)) {
         const fan = await runSubagentFanout({
           subagents: ctx.task.config.subagents,

@@ -356,10 +356,13 @@ header .toolbar {
   display: none !important;
 }
 
-/* the farm view keeps the old zone grid that used to live on #map */
+/* Farm view: a simple vertical stack — title, then the full-width map,
+   then the 4 equal zone cards (.zone-grid). The old auto-fit grid let the
+   zone row drift and the last column (Рынок) shrink relative to the
+   centered map; the dedicated .zone-grid below fixes both. */
 #farm-view:not([hidden]) {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 1.75rem;
 }
 
@@ -369,14 +372,38 @@ header .toolbar {
   padding-bottom: 6rem;
 }
 
-/* the zone-card row keeps clear ground under itself */
-#farm-view section[data-zone]:last-of-type {
-  margin-bottom: 2rem;
+#farm-view > h2 {
+  margin: 0;
 }
 
-#farm-view > h2 {
-  grid-column: 1 / -1;
-  margin: 0;
+/* ---------- Zone cards: explicit equal 4-column grid, centered ----------
+   repeat(4, minmax(0,1fr)) gives FOUR truly equal tracks (minmax(0,...)
+   lets each shrink uniformly — no single column can hog or starve), so the
+   Рынок card matches the other three exactly. The group is capped at a sane
+   width and centered with margin:0 auto so it sits squarely under the map
+   (.farmhouse, max-width 1040px) instead of drifting. Collapses to 2 then 1
+   column on narrow viewports, still centered. */
+.zone-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.75rem;
+  width: 100%;
+  max-width: 1040px;        /* matches the map hero width — group reads as one block */
+  margin: 0 auto 2rem;      /* centered; keeps clear ground under the last row */
+}
+
+@media (max-width: 56.25rem) {   /* ~900px: two equal columns */
+  .zone-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 36rem;
+  }
+}
+
+@media (max-width: 33.75rem) {   /* ~540px: single column */
+  .zone-grid {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 28rem;
+  }
 }
 
 /* ---------- Board view: full-bleed work surface ----------
@@ -397,6 +424,67 @@ header .toolbar {
 
 #board-view > h2 {
   margin: 0 0 1.5rem;
+}
+
+/* ---------- Board bar: per-board (chat) switcher ----------
+   First control of #board-view: a wooden tray holding the «Доска:» label,
+   the board <select>, and the new/rename/delete buttons. role="group" in
+   markup; the <select> is the switcher (NOT a tablist). Wraps cleanly on
+   narrow screens; everything keeps the cream-on-wood theme. */
+.board-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem 0.75rem;
+  margin: 0 0 1.5rem;
+  padding: 0.875rem 1rem;
+  background: var(--surface-2);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+  box-shadow: inset 0 0 0 1px rgba(201, 142, 79, 0.5);
+}
+
+.board-bar > label {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+#board-select {
+  font: inherit;
+  min-height: 2.75rem;          /* comfortable target */
+  flex: 1 1 12rem;
+  max-width: 22rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+}
+
+#board-select:hover {
+  border-color: var(--wood-dark);
+}
+
+/* delete is distinct but contrast-safe: warm error-tinted parchment with
+   the same chocolate ink (meaning never rides on color alone — the button
+   text «Удалить» + aria-label carry it). */
+.board-bar .board-delete {
+  background: #f3d9c8;          /* warm tint; #3a2417 ink stays >= 7:1 */
+  border-color: var(--state-error);
+  box-shadow:
+    inset 0 0 0 2px rgba(168, 67, 31, 0.35),
+    0.25rem 0.25rem 0 rgba(84, 51, 26, 0.35);
+}
+
+.board-bar .board-delete:hover {
+  background: #f7e2d4;
+}
+
+.board-bar .board-delete[aria-disabled="true"] {
+  color: var(--ink-dim);
+  background: #ece0c2;
+  border-color: var(--wood);
+  box-shadow: none;
 }
 
 /* ---------- Wide screens: controls share the title line ----------
@@ -528,13 +616,16 @@ section[data-zone] .glyph {
   margin-top: 1rem;
 }
 
+/* Card = centered vertical stack: portrait on top (horizontally centered),
+   role badge, then name — all centered. (boss: «иконки работников не по
+   центру» — the old 2-column portrait|text layout pinned the sprite to the
+   left edge of the card; centering it reads as the worker's plaque.) */
 .crew .card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  column-gap: 0.75rem;
-  row-gap: 0.375rem;
-  align-content: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.375rem;
   padding: 0.875rem 1rem;    /* +25% inner air */
   border: 0.1875rem solid var(--wood);
   border-radius: 0.5rem;
@@ -546,12 +637,12 @@ section[data-zone] .glyph {
 
 /* portrait: bust sprite (16x13 head-and-shoulders crop — the face fills
    the frame) in a cream inset frame (decorative, alt="" + aria-hidden in
-   DOM); 4.5x4rem box suits the wide bust ratio */
+   DOM); 4.5x4rem box suits the wide bust ratio. Centered in the card by the
+   parent's align-items:center; margin-bottom adds a touch of air. */
 .crew .portrait {
-  grid-row: 1 / 3;
-  align-self: center;
   width: 4.5rem;
   height: 4rem;
+  margin-bottom: 0.125rem;
   padding: 0.375rem;
   object-fit: contain;
   image-rendering: pixelated;
@@ -564,8 +655,6 @@ section[data-zone] .glyph {
 /* role badge: colored BACKGROUND + #3a2417 text (never color-as-text);
    role is also plain text, so meaning never rides on color alone */
 .crew .card-role {
-  grid-column: 2;
-  justify-self: start;
   margin: 0;
   padding: 0.125rem 0.5rem;
   font-size: 1.25rem;          /* computed 12px — body floor */
@@ -583,7 +672,6 @@ section[data-zone] .glyph {
 }
 
 .crew .card-name {
-  grid-column: 2;
   margin: 0;
   color: var(--ink);
   font-weight: 700;
@@ -1527,8 +1615,8 @@ select:disabled,
 
 /* ---------- Config chips on task cards (DOM: title -> badges -> status) ----------
    Non-interactive <span> chips rendered by app.js after the card title:
-   .badge-model («Клауд 4.8» / «Соннет 4.6» / «Хайку 4.5» / «GPT-5.5») and
-   .badge-mode («Ультракод» / «Обычный» / «Фастер»). Full-text labels,
+   .badge-model («Клауд 4.8» / «Соннет 4.6» / «Хайку 4.5») and
+   .badge-mode («Ультракод» / «Обычный»). Full-text labels,
    darkened state-color set only (>= 4.5:1 on the #f1dfae note parchment;
    the cream chip background raises it further), 1px border, floor 11px. */
 
@@ -1574,7 +1662,7 @@ select:disabled,
   height: 1.8rem;
 }
 
-/* ---------- Dialogs: onboarding + settings ----------
+/* ---------- Dialog: settings ----------
    Wooden Stardew frame + cream panel come from the shared frame recipe
    above (dialog is in the selector list). No open/close animation is
    added — nothing new for the reduced-motion / pause gates to cover. */
@@ -1610,28 +1698,6 @@ dialog h2 {
   margin-top: 0.25rem;
 }
 
-/* onboarding: two big engine choices, each described by its own <p> */
-.onboarding-choices {
-  display: grid;
-  gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
-}
-
-.onboarding-choice {
-  display: grid;
-  gap: 0.5rem;
-  align-content: start;
-}
-
-.onboarding-choice button {
-  width: 100%;
-}
-
-.onboarding-choice p {
-  margin: 0;
-  color: var(--ink-dim);
-}
-
 /* ---------- Fieldsets: cream inset groups (dialogs + task config) ---------- */
 
 dialog fieldset,
@@ -1654,8 +1720,8 @@ dialog legend,
   border-radius: 0.25rem;
 }
 
-/* the inactive engine fieldset carries the hidden ATTRIBUTE; guard it the
-   same way the views are guarded so no display rule can ever defeat it */
+/* any [hidden] inside the dialog/task config is guarded the same way the
+   views are, so no display rule can ever defeat the attribute */
 dialog [hidden],
 #task-config [hidden] {
   display: none !important;
@@ -1666,17 +1732,28 @@ dialog [hidden],
   margin-top: 1rem !important;
 }
 
-/* radio/checkbox rows */
-.engine-picker,
+/* checkbox rows */
 .subtype-picker {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1.5rem;
 }
 
-.engine-picker legend,
 .subtype-picker legend {
   margin-bottom: 0.25rem;
+}
+
+/* «Субагентов» = 0 -> the model + types are inert (none are spawned). Dim the
+   labels/legend to match the disabled controls; aria-disabled carries it to AT. */
+.subtype-picker.subagents-off {
+  opacity: 0.55;
+}
+.subtype-picker.subagents-off legend,
+.subtype-picker.subagents-off .choice {
+  color: var(--ink-dim);
+}
+.form-field.subagents-off label {
+  color: var(--ink-dim);
 }
 
 .choice {
@@ -1802,8 +1879,10 @@ footer {
     padding: 0 0 1.5rem;     /* body keeps the >=1.5rem side air at 320px */
   }
 
-  #farm-view:not([hidden]) {
-    grid-template-columns: 1fr;
+  /* zone cards already single-column from .zone-grid <=33.75rem; just trim
+     the side air so a 320px viewport keeps the cards full-width */
+  .zone-grid {
+    max-width: 100%;
   }
 
   .board {

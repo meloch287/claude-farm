@@ -7,9 +7,14 @@
  *  - coalesced role="status" announcer (queue, min 2s between flushes, assertive only on failure)
  *  - view switcher «Ферма»/«Доска»: aria-pressed buttons toggle the hidden
  *    attribute on #farm-view/#board-view, choice persisted (localStorage "farm.view")
- *  - kanban board: renders GET /api/tasks into 6 columns + epic strip,
- *    refetch debounced 500ms on SSE events carrying taskId, status diffs
- *    announced as ONE merged summary through the same coalesced #status
+ *  - boards (chats): GET /api/boards drives #board-select; switching posts
+ *    /api/boards/:id/active, refetches GET /api/tasks?board=<id>, re-renders;
+ *    #board-new/#board-rename/#board-delete create/rename/delete via the API.
+ *    All board moves go through the coalesced #status (polite); focus stays
+ *    on the control the user used.
+ *  - kanban board: renders GET /api/tasks?board=<id> (active board) into 6
+ *    columns + epic strip, refetch debounced 500ms on SSE events carrying
+ *    taskId, status diffs announced as ONE merged summary through #status
  *  - #task-form: POST /api/task with mode from the clicked submit button
  *    (event.submitter), aria-disabled pending pattern, inline title
  *    validation (#err-title), AI-split polling every 2s up to 120s
@@ -25,11 +30,11 @@
  *    v2); «Анимация» pause toggle (#btn-anim, localStorage "farm.anim") and
  *    prefers-reduced-motion collapse all choreography to instant final
  *    poses; map elements stay aria-hidden and are never announced
- *  - Engine config: onboarding <dialog> (first visit, localStorage
- *    "farm.engineChosen"), settings <dialog> behind #btn-settings
- *    (GET/PUT /api/settings), per-task <details id="task-config"> prefilled
- *    from the global settings; POST /api/task carries the per-task config
- *  - Kanban cards render model/mode/speed chips from task.config
+ *  - Settings: settings <dialog> behind #btn-settings (GET/PUT
+ *    /api/settings, flat Claude-only shape {model, mode, subagents}), per-task
+ *    <details id="task-config"> prefilled from the global settings; POST
+ *    /api/task carries the per-task config (model, mode, subagents)
+ *  - Kanban cards render model/mode chips from task.config
  *  - Helpers: decorative subagent sprites in the Теплица while the active
  *    task is in QA, gated by reduced-motion and the «Анимация» pause
  */
@@ -77,6 +82,12 @@
     taskForm: document.getElementById("task-form"),
     taskTitle: document.getElementById("task-title"),
     taskInput: document.getElementById("task-input"),
+    taskBoardId: document.getElementById("task-board-id"),
+    boardSelect: document.getElementById("board-select"),
+    boardNew: document.getElementById("board-new"),
+    boardRename: document.getElementById("board-rename"),
+    boardDelete: document.getElementById("board-delete"),
+    boardViewTitle: document.getElementById("board-view-title"),
   };
 
   const zoneEls = {};
@@ -462,6 +473,12 @@
   let boardFetchInFlight = false;
   let boardFetchAgain = false;
 
+  // Boards (chats): the active board scopes every GET /api/tasks request and
+  // the POST /api/task body. null until the first GET /api/boards resolves;
+  // the board renderer filters to it so cards from other boards never leak in.
+  let boards = [];           // [{id, name, createdAt}]
+  let activeBoardId = null;
+
   function columnForTask(task) {
     switch (task.status) {
       case "queued": return "queue";
@@ -478,6 +495,16 @@
   function truncateText(text, max) {
     const s = typeof text === "string" ? text : "";
     return s.length > max ? s.slice(0, max - 1) + "…" : s;
+  }
+
+  // Russian plural agreement for «задача»: 1 задача, 2 задачи, 5 задач.
+  function pluralTasks(n) {
+    const a = Math.abs(n) % 100;
+    const b = a % 10;
+    if (a > 10 && a < 20) return "задач";
+    if (b > 1 && b < 5) return "задачи";
+    if (b === 1) return "задача";
+    return "задач";
   }
 
   // Find-or-create the board DOM per the contract: section.board-col with
@@ -499,7 +526,9 @@
       view.appendChild(board);
     }
 
-    let strip = view.querySelector(".epic-strip");
+    // index.html ships <div id="epics" class="epics"> ABOVE the columns;
+    // reuse it as the epic strip. Fall back to building one if it is missing.
+    let strip = document.getElementById("epics") || view.querySelector(".epic-strip");
     if (!strip) {
       strip = document.createElement("div");
       strip.className = "epic-strip";
@@ -551,7 +580,7 @@
     li.appendChild(title);
 
     // Config chips right after the title (contract DOM order:
-    // title -> badges -> status): model label, then mode/speed, then «ИИ».
+    // title -> badges -> status): model label, then mode, then «ИИ».
     for (const chip of buildConfigChips(task)) {
       li.appendChild(document.createTextNode(" "));
       li.appendChild(chip);
@@ -718,7 +747,11 @@
       return Promise.resolve(null);
     }
     boardFetchInFlight = true;
-    return fetch("/api/tasks")
+    // Scope to the active board so cards from other chats never render here.
+    const url = activeBoardId
+      ? "/api/tasks?board=" + encodeURIComponent(activeBoardId)
+      : "/api/tasks";
+    return fetch(url)
       .then(function (res) {
         if (!res.ok) throw new Error("HTTP " + res.status);
         return res.json();
@@ -745,6 +778,215 @@
       boardRefetchTimer = null;
       fetchBoard();
     }, BOARD_REFETCH_MS);
+  }
+
+  // ------------------------------------------------------------------ boards (chats)
+  // GET /api/boards -> {boards, activeBoardId} drives #board-select. Switching
+  // posts /api/boards/:id/active, suppresses the false move-diff
+  // (boardPrevColumns = null), refetches GET /api/tasks?board=<id> and
+  // re-renders. All announcements go through the coalesced #status (polite);
+  // there is NO live region on the board itself. Focus stays on whichever
+  // control the user used (the <select> on switch, #task-title after a new
+  // board, #board-select after a delete). Everything no-ops when the markup
+  // has not shipped.
+
+  function activeBoardName() {
+    const b = boards.find(function (x) { return x && x.id === activeBoardId; });
+    return b && typeof b.name === "string" ? b.name : "";
+  }
+
+  // Rebuild the <option> list from `boards`; mark the active one selected.
+  function populateBoardSelect() {
+    const sel = els.boardSelect;
+    if (!sel) return;
+    sel.textContent = "";
+    for (const board of boards) {
+      if (!board || board.id == null) continue;
+      const opt = document.createElement("option");
+      opt.value = String(board.id);
+      opt.textContent = typeof board.name === "string" && board.name ? board.name : "Доска";
+      if (board.id === activeBoardId) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
+  // Sync the title, the hidden boardId the task form posts, and the
+  // rename/delete accessible names to the active board.
+  function syncBoardUi() {
+    const name = activeBoardName();
+    if (els.boardViewTitle) {
+      els.boardViewTitle.textContent = name
+        ? "Доска задач — " + name
+        : "Доска задач";
+    }
+    if (els.taskBoardId) els.taskBoardId.value = activeBoardId != null ? String(activeBoardId) : "";
+    if (els.boardRename) {
+      els.boardRename.setAttribute("aria-label",
+        name ? "Переименовать доску: " + name : "Переименовать доску");
+    }
+    if (els.boardDelete) {
+      els.boardDelete.setAttribute("aria-label",
+        name ? "Удалить доску: " + name : "Удалить доску");
+    }
+  }
+
+  // Apply a fresh {boards, activeBoardId} payload to the local state + UI.
+  function applyBoardsData(data) {
+    if (!data || !Array.isArray(data.boards)) return false;
+    boards = data.boards.filter(function (b) { return b && b.id != null; });
+    if (typeof data.activeBoardId === "string" && boards.some(function (b) { return b.id === data.activeBoardId; })) {
+      activeBoardId = data.activeBoardId;
+    } else if (boards.length && (activeBoardId == null || !boards.some(function (b) { return b.id === activeBoardId; }))) {
+      activeBoardId = boards[0].id;
+    }
+    populateBoardSelect();
+    syncBoardUi();
+    return true;
+  }
+
+  function fetchBoards() {
+    return fetch("/api/boards")
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) { return applyBoardsData(data) ? data : null; })
+      .catch(function () { return null; });
+  }
+
+  // Switch the active board: tell the server, suppress the false move-diff so
+  // the swap reads as a fresh paint (not "everything moved"), repaint that
+  // board's tasks, and announce once. Focus stays on #board-select.
+  function switchToBoard(id, opts) {
+    const announceSwitch = !opts || opts.announce !== false;
+    activeBoardId = id;
+    populateBoardSelect();
+    syncBoardUi();
+    if (els.boardSelect) els.boardSelect.focus();
+    boardPrevColumns = null; // SUPPRESS the false move-diff across the swap
+    fetch("/api/boards/" + encodeURIComponent(id) + "/active", { method: "POST" })
+      .catch(function () { /* keep the local switch even if the POST fails */ });
+    return fetchBoard().then(function (tasks) {
+      if (!announceSwitch) return tasks;
+      const n = Array.isArray(tasks)
+        ? tasks.filter(function (t) { return t && columnForTask(t) !== null; }).length
+        : 0;
+      const name = activeBoardName();
+      announce("Доска: " + (name || "без названия") + " (" + n + " " + pluralTasks(n) + ")");
+      return tasks;
+    });
+  }
+
+  function handleNewBoard() {
+    fetch("/api/boards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        const board = data && data.board ? data.board : null;
+        if (!board || board.id == null) throw new Error("no board");
+        return fetchBoards().then(function () {
+          activeBoardId = board.id;
+          populateBoardSelect();
+          syncBoardUi();
+          boardPrevColumns = null; // fresh, empty board: no move-diff
+          // POST /api/boards already made it active server-side; just repaint.
+          return fetchBoard().then(function () {
+            if (els.taskTitle) els.taskTitle.focus(); // straight to the form
+            announce("Новая доска создана: " + (board.name || "без названия"));
+          });
+        });
+      })
+      .catch(function () { announce("Не удалось создать доску"); });
+  }
+
+  // Rename uses a native prompt() rather than an inline contenteditable: native
+  // dialogs are announced and operated by screen readers out of the box (no
+  // focus-trap/escape wiring to get wrong), so it is the chosen accessible path.
+  // On commit we still PATCH and refresh the <option> text, #board-view-title
+  // and both aria-labels, then announce «Доска переименована: <имя>» (per spec).
+  function handleRenameBoard() {
+    if (activeBoardId == null) return;
+    const current = activeBoardName();
+    const next = typeof prompt === "function"
+      ? prompt("Новое название доски:", current)
+      : null;
+    if (next == null) return;          // cancelled
+    const name = String(next).trim();
+    if (!name || name === current) {   // empty or unchanged: nothing to do
+      if (els.boardRename) els.boardRename.focus();
+      return;
+    }
+    fetch("/api/boards/" + encodeURIComponent(activeBoardId), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name }),
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        const board = data && data.board ? data.board : null;
+        const finalName = board && typeof board.name === "string" ? board.name : name;
+        const idx = boards.findIndex(function (b) { return b && b.id === activeBoardId; });
+        if (idx !== -1) boards[idx].name = finalName;
+        populateBoardSelect();   // refresh the <option> text
+        syncBoardUi();           // title + rename/delete aria-labels
+        if (els.boardRename) els.boardRename.focus();
+        announce("Доска переименована: " + finalName);
+      })
+      .catch(function () { announce("Не удалось переименовать доску"); });
+  }
+
+  function handleDeleteBoard() {
+    if (activeBoardId == null) return;
+    const name = activeBoardName();
+    if (typeof confirm === "function"
+        && !confirm("Удалить доску «" + (name || "без названия") + "» и все её задачи?")) {
+      return;
+    }
+    const deletedId = activeBoardId;
+    fetch("/api/boards/" + encodeURIComponent(deletedId), { method: "DELETE" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        // The server returns the fresh {boards, activeBoardId} (never zero).
+        applyBoardsData(data);
+        boardPrevColumns = null; // landing on a different board: no move-diff
+        if (els.boardSelect) els.boardSelect.focus();
+        return fetchBoard().then(function () {
+          announce("Доска удалена: " + (name || "без названия"));
+        });
+      })
+      .catch(function () { announce("Не удалось удалить доску"); });
+  }
+
+  function initBoards() {
+    // Even when the board bar has not shipped, fetch /api/boards so the active
+    // board scopes the task store and the task form posts the right boardId.
+    if (els.boardSelect) {
+      els.boardSelect.addEventListener("change", function () {
+        switchToBoard(els.boardSelect.value);
+      });
+    }
+    if (els.boardNew) els.boardNew.addEventListener("click", handleNewBoard);
+    if (els.boardRename) els.boardRename.addEventListener("click", handleRenameBoard);
+    if (els.boardDelete) els.boardDelete.addEventListener("click", handleDeleteBoard);
+
+    fetchBoards().then(function () {
+      // First board paint is silent (the diff baseline for restored tasks);
+      // do not announce on boot.
+      boardPrevColumns = null;
+      fetchBoard();
+    });
   }
 
   // ------------------------------------------------------------------ task form (#task-form)
@@ -854,6 +1096,12 @@
         : "Создаём задачу…");
 
       const payload = { title: title, input: input, mode: mode };
+      // Post into the active board (the hidden #task-board-id input, kept in
+      // sync by syncBoardUi); the new card renders into the current board only.
+      const boardId = els.taskBoardId && els.taskBoardId.value
+        ? els.taskBoardId.value
+        : (activeBoardId != null ? String(activeBoardId) : "");
+      if (boardId) payload.boardId = boardId;
       const config = taskConfigPayload();
       if (config) payload.config = config;
 
@@ -893,57 +1141,45 @@
     }
   }
 
-  // ------------------------------------------------------------------ engine config
-  // Global settings (onboarding + settings dialog, GET/PUT /api/settings)
-  // and the per-task config <details id="task-config">. Every init binds
-  // defensively: when the markup has not shipped yet it simply no-ops.
-  // Settings shape: {engine, claude:{model, mode, subagents:{model, count,
-  // types}}, codex:{model, speed}}.
+  // ------------------------------------------------------------------ settings
+  // Global settings (settings dialog, GET/PUT /api/settings) and the per-task
+  // config <details id="task-config">. Claude is the only engine, so its
+  // controls are always visible — there is no engine choice and no onboarding.
+  // Settings shape is flat & Claude-only:
+  //   {model, mode, subagents:{model, count, types}}.
+  // Every init binds defensively: when the markup has not shipped yet it
+  // simply no-ops.
 
-  const ENGINE_CHOSEN_KEY = "farm.engineChosen";
   const SUB_COUNT_MIN = 0;
   const SUB_COUNT_MAX = 8;
   const SUB_TYPES = ["review", "bugs", "optimize", "factcheck"];
 
   // Hardcoded fallback catalog; refreshed from /api/state when the server
-  // exposes claudeModels/codexModels (farm.config.json catalog).
+  // exposes claudeModels (farm.config.json catalog).
   let claudeModels = [
     { id: "claude-opus-4-8", label: "Клауд 4.8" },
     { id: "claude-sonnet-4-6", label: "Соннет 4.6" },
     { id: "claude-haiku-4-5-20251001", label: "Хайку 4.5" },
-  ];
-  let codexModels = [
-    { id: "gpt-5.5", label: "GPT-5.5" },
   ];
 
   const MODE_OPTIONS = [
     { id: "ultracode", label: "Ультракод" },
     { id: "normal", label: "Обычный" },
   ];
-  const SPEED_OPTIONS = [
-    { id: "normal", label: "Обычная" },
-    { id: "faster", label: "Фастер" },
-  ];
   // Chip labels on kanban cards (full text, never abbreviations).
   const MODE_CHIP_LABELS = { ultracode: "Ультракод", normal: "Обычный" };
-  const SPEED_CHIP_LABELS = { normal: "Обычный", faster: "Фастер" };
 
   function modelLabel(id) {
     if (typeof id !== "string" || !id) return null;
     for (const m of claudeModels) { if (m.id === id) return m.label; }
-    for (const m of codexModels) { if (m.id === id) return m.label; }
     return id; // unknown id: show it verbatim rather than hiding the chip
   }
 
   function defaultSettings() {
     return {
-      engine: "claude",
-      claude: {
-        model: "claude-opus-4-8",
-        mode: "ultracode",
-        subagents: { model: "claude-sonnet-4-6", count: 3, types: ["review", "bugs"] },
-      },
-      codex: { model: "gpt-5.5", speed: "normal" },
+      model: "claude-opus-4-8",
+      mode: "ultracode",
+      subagents: { model: "claude-sonnet-4-6", count: 3, types: ["review", "bugs"] },
     };
   }
 
@@ -959,21 +1195,16 @@
   function normalizeSettings(raw) {
     const base = defaultSettings();
     if (!raw || typeof raw !== "object") return base;
-    if (raw.engine === "codex" || raw.engine === "claude") base.engine = raw.engine;
-    const claude = raw.claude && typeof raw.claude === "object" ? raw.claude : {};
-    if (typeof claude.model === "string" && claude.model) base.claude.model = claude.model;
-    if (claude.mode === "normal" || claude.mode === "ultracode") base.claude.mode = claude.mode;
-    const sub = claude.subagents && typeof claude.subagents === "object" ? claude.subagents : {};
-    if (typeof sub.model === "string" && sub.model) base.claude.subagents.model = sub.model;
-    base.claude.subagents.count = clampCount(sub.count, base.claude.subagents.count);
+    if (typeof raw.model === "string" && raw.model) base.model = raw.model;
+    if (raw.mode === "normal" || raw.mode === "ultracode") base.mode = raw.mode;
+    const sub = raw.subagents && typeof raw.subagents === "object" ? raw.subagents : {};
+    if (typeof sub.model === "string" && sub.model) base.subagents.model = sub.model;
+    base.subagents.count = clampCount(sub.count, base.subagents.count);
     if (Array.isArray(sub.types)) {
-      base.claude.subagents.types = sub.types.filter(function (t) {
+      base.subagents.types = sub.types.filter(function (t) {
         return SUB_TYPES.indexOf(t) !== -1;
       });
     }
-    const codex = raw.codex && typeof raw.codex === "object" ? raw.codex : {};
-    if (typeof codex.model === "string" && codex.model) base.codex.model = codex.model;
-    if (codex.speed === "faster" || codex.speed === "normal") base.codex.speed = codex.speed;
     return base;
   }
 
@@ -1019,10 +1250,6 @@
           const list = src.claudeModels.filter(validCatalogEntry);
           if (list.length) claudeModels = list;
         }
-        if (Array.isArray(src.codexModels)) {
-          const list = src.codexModels.filter(validCatalogEntry);
-          if (list.length) codexModels = list;
-        }
       })
       .catch(function () { /* hardcoded catalog stays */ });
   }
@@ -1039,7 +1266,9 @@
     }
   }
 
-  function engineControls(root, prefix) {
+  // Resolve the Claude controls under a root by id prefix. Claude is the only
+  // executor, so the fieldset is always visible — no radios, no extra controls.
+  function claudeControls(root, prefix) {
     if (!root) return null;
     function byId(suffix) {
       const el = document.getElementById(prefix + suffix);
@@ -1047,156 +1276,80 @@
     }
     const controls = {
       root: root,
-      radios: [],
       model: byId("model"),
       mode: byId("mode"),
       subModel: byId("sub-model"),
       subCount: byId("sub-count"),
-      codexModel: byId("codex-model"),
-      codexSpeed: byId("codex-speed"),
+      subFieldset: root.querySelector(".subtype-picker"),
       typeBoxes: Array.prototype.slice.call(
         root.querySelectorAll('input[type="checkbox"][name="' + prefix + 'sub-type"]')
       ),
     };
-    const radios = root.querySelectorAll('input[type="radio"]');
-    for (const radio of radios) {
-      if (radio.value === "claude" || radio.value === "codex") controls.radios.push(radio);
+    // Live-toggle the model + types when «Субагентов» reaches/leaves 0.
+    if (controls.subCount) {
+      controls.subCount.addEventListener("input", function () {
+        syncSubagentEnabled(controls);
+      });
     }
-    controls.claudeFieldset = controls.model ? controls.model.closest("fieldset") : null;
-    controls.codexFieldset = controls.codexModel ? controls.codexModel.closest("fieldset") : null;
     return controls;
   }
 
-  function selectedEngine(controls) {
-    if (controls) {
-      for (const radio of controls.radios) {
-        if (radio.checked) return radio.value;
-      }
+  // When «Субагентов» is 0 none are spawned (planSubagents -> []), so the
+  // model + types controls are inert. Disable + dim them and mirror the state
+  // with aria-disabled so it is conveyed non-visually too.
+  function syncSubagentEnabled(controls) {
+    if (!controls || !controls.subCount) return;
+    const active = clampCount(controls.subCount.value, 0) > 0;
+    const targets = [controls.subModel].concat(controls.typeBoxes);
+    for (const el of targets) {
+      if (!el) continue;
+      el.disabled = !active;
+      el.setAttribute("aria-disabled", active ? "false" : "true");
     }
-    return currentSettings.engine;
-  }
-
-  // The INACTIVE engine fieldset gets the hidden attribute (not disabled),
-  // so it leaves the a11y tree entirely; focus never moves on radio change.
-  function applyEngineFieldsets(controls) {
-    if (!controls) return;
-    const engine = selectedEngine(controls);
-    if (controls.claudeFieldset) controls.claudeFieldset.hidden = engine !== "claude";
-    if (controls.codexFieldset) controls.codexFieldset.hidden = engine !== "codex";
-  }
-
-  function bindEngineRadios(controls) {
-    if (!controls) return;
-    for (const radio of controls.radios) {
-      radio.addEventListener("change", function () { applyEngineFieldsets(controls); });
+    if (controls.subFieldset) {
+      controls.subFieldset.classList.toggle("subagents-off", !active);
+    }
+    if (controls.subModel) {
+      const field = controls.subModel.closest(".form-field");
+      if (field) field.classList.toggle("subagents-off", !active);
     }
   }
 
-  function fillEngineControls(controls, settings) {
+  function fillClaudeControls(controls, settings) {
     if (!controls) return;
-    for (const radio of controls.radios) {
-      radio.checked = radio.value === settings.engine;
-    }
     ensureOptions(controls.model, claudeModels);
     ensureOptions(controls.subModel, claudeModels);
     ensureOptions(controls.mode, MODE_OPTIONS);
-    ensureOptions(controls.codexModel, codexModels);
-    ensureOptions(controls.codexSpeed, SPEED_OPTIONS);
-    if (controls.model) controls.model.value = settings.claude.model;
-    if (controls.mode) controls.mode.value = settings.claude.mode;
-    if (controls.subModel) controls.subModel.value = settings.claude.subagents.model;
-    if (controls.subCount) controls.subCount.value = String(settings.claude.subagents.count);
+    if (controls.model) controls.model.value = settings.model;
+    if (controls.mode) controls.mode.value = settings.mode;
+    if (controls.subModel) controls.subModel.value = settings.subagents.model;
+    if (controls.subCount) controls.subCount.value = String(settings.subagents.count);
     for (const box of controls.typeBoxes) {
-      box.checked = settings.claude.subagents.types.indexOf(box.value) !== -1;
+      box.checked = settings.subagents.types.indexOf(box.value) !== -1;
     }
-    if (controls.codexModel) controls.codexModel.value = settings.codex.model;
-    if (controls.codexSpeed) controls.codexSpeed.value = settings.codex.speed;
-    applyEngineFieldsets(controls);
+    syncSubagentEnabled(controls);
   }
 
-  function readEngineControls(controls) {
+  function readClaudeControls(controls) {
     const out = normalizeSettings(currentSettings); // deep copy of the current state
     if (!controls) return out;
-    out.engine = selectedEngine(controls) === "codex" ? "codex" : "claude";
-    if (controls.model && controls.model.value) out.claude.model = controls.model.value;
+    if (controls.model && controls.model.value) out.model = controls.model.value;
     if (controls.mode && (controls.mode.value === "normal" || controls.mode.value === "ultracode")) {
-      out.claude.mode = controls.mode.value;
+      out.mode = controls.mode.value;
     }
     if (controls.subModel && controls.subModel.value) {
-      out.claude.subagents.model = controls.subModel.value;
+      out.subagents.model = controls.subModel.value;
     }
     if (controls.subCount) {
-      out.claude.subagents.count = clampCount(controls.subCount.value, out.claude.subagents.count);
+      out.subagents.count = clampCount(controls.subCount.value, out.subagents.count);
     }
     if (controls.typeBoxes.length) {
-      out.claude.subagents.types = controls.typeBoxes
+      out.subagents.types = controls.typeBoxes
         .filter(function (box) { return box.checked; })
         .map(function (box) { return box.value; })
         .filter(function (v) { return SUB_TYPES.indexOf(v) !== -1; });
     }
-    if (controls.codexModel && controls.codexModel.value) out.codex.model = controls.codexModel.value;
-    if (controls.codexSpeed
-        && (controls.codexSpeed.value === "normal" || controls.codexSpeed.value === "faster")) {
-      out.codex.speed = controls.codexSpeed.value;
-    }
     return out;
-  }
-
-  // ---- onboarding dialog (first visit only) ----
-
-  function engineChosen() {
-    try { return localStorage.getItem(ENGINE_CHOSEN_KEY) === "1"; } catch (err) { return false; }
-  }
-
-  function markEngineChosen() {
-    try { localStorage.setItem(ENGINE_CHOSEN_KEY, "1"); } catch (err) { /* ignore */ }
-  }
-
-  function findEngineButton(dialog, engine, pattern) {
-    let btn = dialog.querySelector('button[data-engine="' + engine + '"]');
-    if (btn) return btn;
-    btn = dialog.querySelector('button[value="' + engine + '"]');
-    if (btn) return btn;
-    const buttons = dialog.querySelectorAll("button");
-    for (const b of buttons) {
-      if (pattern.test(b.textContent || "")) return b;
-    }
-    return null;
-  }
-
-  function initOnboarding() {
-    const dialog = document.getElementById("onboarding-dialog");
-    if (!dialog || typeof dialog.showModal !== "function") return;
-    if (engineChosen()) return; // first visit only
-
-    let picked = false;
-
-    function choose(engine) {
-      picked = true;
-      markEngineChosen();
-      currentSettings.engine = engine;
-      putSettings({ engine: engine })
-        .then(function () { currentSettings.engine = engine; }) // wins any GET race
-        .catch(function () { /* keep the local choice */ });
-      prefillTaskConfig();
-      announce(engine === "codex"
-        ? "Движок: Кодекс. Изменить можно в настройках"
-        : "Движок: Клауд. Изменить можно в настройках");
-      if (dialog.open) dialog.close();
-    }
-
-    const claudeBtn = findEngineButton(dialog, "claude", /клауд/i);
-    const codexBtn = findEngineButton(dialog, "codex", /кодекс/i);
-    if (claudeBtn) claudeBtn.addEventListener("click", function () { choose("claude"); });
-    if (codexBtn) codexBtn.addEventListener("click", function () { choose("codex"); });
-
-    // Escape is ALLOWED: closing without a pick defaults to Клауд and still
-    // sets the flag so the dialog never nags again.
-    dialog.addEventListener("close", function () {
-      if (!picked) choose("claude");
-    });
-
-    try { dialog.showModal(); } catch (err) { /* already open / unsupported */ }
   }
 
   // ---- settings dialog (#btn-settings -> #settings-dialog) ----
@@ -1207,8 +1360,7 @@
     const btn = document.getElementById("btn-settings");
     const dialog = document.getElementById("settings-dialog");
     if (!btn || !dialog || typeof dialog.showModal !== "function") return;
-    settingsControls = engineControls(dialog, "set-");
-    bindEngineRadios(settingsControls);
+    settingsControls = claudeControls(dialog, "set-");
 
     let saveRequested = false;
 
@@ -1225,11 +1377,11 @@
 
     btn.addEventListener("click", function () {
       saveRequested = false;
-      fillEngineControls(settingsControls, currentSettings);
+      fillClaudeControls(settingsControls, currentSettings);
       // Refresh from the server, refill while the user has not saved yet.
       fetchSettings().then(function () {
         if (dialog.open && !saveRequested) {
-          fillEngineControls(settingsControls, currentSettings);
+          fillClaudeControls(settingsControls, currentSettings);
         }
       });
       try { dialog.showModal(); } catch (err) { /* ignore */ }
@@ -1240,7 +1392,7 @@
       const saved = saveRequested || /^(save|сохранить)$/i.test(dialog.returnValue || "");
       saveRequested = false;
       if (!saved) return;
-      currentSettings = readEngineControls(settingsControls);
+      currentSettings = readClaudeControls(settingsControls);
       prefillTaskConfig();
       putSettings(currentSettings)
         .then(function () { announce("Настройки сохранены"); })
@@ -1255,34 +1407,29 @@
   function initTaskConfig() {
     const details = document.getElementById("task-config");
     if (!details) return;
-    taskConfigControls = engineControls(details, "cfg-");
-    bindEngineRadios(taskConfigControls);
+    taskConfigControls = claudeControls(details, "cfg-");
     prefillTaskConfig();
   }
 
-  // Silent prefill from the global settings: on load, after onboarding and
-  // after every settings save. Never announces, never moves focus.
+  // Silent prefill from the global settings: on load and after every settings
+  // save. Never announces, never moves focus.
   function prefillTaskConfig() {
-    if (taskConfigControls) fillEngineControls(taskConfigControls, currentSettings);
+    if (taskConfigControls) fillClaudeControls(taskConfigControls, currentSettings);
   }
 
-  // POST /api/task config payload: {engine, model, mode, subagents} for
-  // Клауд, {engine, model, speed} for Кодекс; null while the per-task
-  // markup has not shipped (the server then applies the global defaults).
+  // POST /api/task config payload: {model, mode, subagents}; null while the
+  // per-task markup has not shipped (the server then applies the global
+  // defaults). No executor/speed choice — Claude is the only executor.
   function taskConfigPayload() {
     if (!taskConfigControls) return null;
-    const cfg = readEngineControls(taskConfigControls);
-    if (cfg.engine === "codex") {
-      return { engine: "codex", model: cfg.codex.model, speed: cfg.codex.speed };
-    }
+    const cfg = readClaudeControls(taskConfigControls);
     return {
-      engine: "claude",
-      model: cfg.claude.model,
-      mode: cfg.claude.mode,
+      model: cfg.model,
+      mode: cfg.mode,
       subagents: {
-        model: cfg.claude.subagents.model,
-        count: cfg.claude.subagents.count,
-        types: cfg.claude.subagents.types.slice(),
+        model: cfg.subagents.model,
+        count: cfg.subagents.count,
+        types: cfg.subagents.types.slice(),
       },
     };
   }
@@ -1297,26 +1444,23 @@
   }
 
   // Non-interactive full-text chips after the card title: model label
-  // («Клауд 4.8»), then mode/speed («Ультракод»/«Фастер»/«Обычный»).
+  // («Клауд 4.8»), then mode («Ультракод»/«Обычный»).
   function buildConfigChips(task) {
     const cfg = task && task.config && typeof task.config === "object" ? task.config : null;
     if (!cfg) return [];
     const chips = [];
     const label = modelLabel(cfg.model);
     if (label) chips.push(makeChip(label, "card-chip-model"));
-    const modeText = cfg.engine === "codex"
-      ? SPEED_CHIP_LABELS[cfg.speed]
-      : MODE_CHIP_LABELS[cfg.mode];
+    const modeText = MODE_CHIP_LABELS[cfg.mode];
     if (modeText) chips.push(makeChip(modeText, "card-chip-mode"));
     return chips;
   }
 
-  function initEngineUi() {
+  function initSettingsUi() {
     initSettingsDialog();
     initTaskConfig();
     fetchModelCatalog();
     fetchSettings().then(prefillTaskConfig);
-    initOnboarding();
   }
 
   // ------------------------------------------------------------------ event state machine
@@ -2470,16 +2614,18 @@
   }
 
   // N: «N субагентов» in the event message wins; else the task's stored
-  // config from /api/tasks; else the global settings (Клауд only — Кодекс
-  // has no subagents).
+  // config from /api/tasks; else the global settings (Клауд subagents).
   function resolveHelperCount(ev) {
     const m = typeof ev.message === "string" ? ev.message.match(/(\d+)\s*субагент/i) : null;
     if (m) return Promise.resolve(parseInt(m[1], 10) || 0);
-    const fallback = currentSettings.engine === "claude"
-      ? currentSettings.claude.subagents.count
+    const fallback = currentSettings.subagents
+      ? currentSettings.subagents.count
       : 0;
     if (ev.taskId == null) return Promise.resolve(fallback);
-    return fetch("/api/tasks")
+    const url = activeBoardId
+      ? "/api/tasks?board=" + encodeURIComponent(activeBoardId)
+      : "/api/tasks";
+    return fetch(url)
       .then(function (res) {
         if (!res.ok) throw new Error("HTTP " + res.status);
         return res.json();
@@ -2489,7 +2635,6 @@
         const task = tasks.find(function (t) { return t && t.id === ev.taskId; });
         const cfg = task && task.config && typeof task.config === "object" ? task.config : null;
         if (!cfg) return fallback;
-        if (cfg.engine === "codex") return 0;
         const sub = cfg.subagents && typeof cfg.subagents === "object" ? cfg.subagents : null;
         const n = sub ? parseInt(sub.count, 10) : NaN;
         return isFinite(n) ? n : fallback;
@@ -2994,14 +3139,18 @@
     }
     initViewSwitcher();
     initTaskForm();
-    initEngineUi();
+    initBoards();
+    initSettingsUi();
     // Park the token in the first zone once layout is ready.
     requestAnimationFrame(function () {
       moveToken(ZONES[0].id, true);
     });
     initCharacterEngine();
     connect();
-    fetchBoard(); // first paint sets the diff baseline silently (restored tasks)
+    // initBoards() fetches /api/boards then does the first board paint;
+    // fetchBoard() here is a belt-and-suspenders baseline if /api/boards is
+    // slow/offline (sets the diff baseline silently for restored tasks).
+    fetchBoard();
   }
 
   if (document.readyState === "loading") {

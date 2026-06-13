@@ -7,8 +7,8 @@
   <title>Клауд Ферма — Урожайная долина</title>
   <link rel="icon" href="favicon.ico" sizes="16x16">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=13">
-  <script src="app.js?v=9" defer></script>
+  <link rel="stylesheet" href="style.css?v=15">
+  <script src="app.js?v=11" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#map">Перейти к карте фермы</a>
@@ -77,6 +77,9 @@
         <img id="paper" class="paper" src="assets/item-paper.svg" alt="" hidden>
       </div>
 
+      <!-- Зоны-карточки конвейера: 4 равных колонки, центрированы под картой
+           (TASK 3). Сетка задаётся .zone-grid в style.css. -->
+      <div class="zone-grid">
       <section class="zone" data-zone="kitchen" data-state="idle" aria-labelledby="zone-kitchen-title">
         <h2 id="zone-kitchen-title">Поле — Сбор</h2>
         <p class="zone-state">
@@ -156,12 +159,28 @@
           </div>
         </div>
       </section>
+      </div>
     </section>
 
     <section id="board-view" hidden aria-labelledby="board-view-title">
       <h2 id="board-view-title">Доска задач</h2>
 
+      <!-- Доски-чаты: app.js грузит /api/boards, рендерит <option> по доске
+           (selected = активная), синхронит заголовок и aria-label кнопок при
+           переключении/переименовании. Перед удалением — confirm(). Анонсы
+           идут в общий #status (polite). -->
+      <div class="board-bar" role="group" aria-label="Управление досками">
+        <label for="board-select">Доска:</label>
+        <select id="board-select"></select>
+        <button id="board-new" type="button">+ Новая доска</button>
+        <button id="board-rename" type="button" aria-label="Переименовать доску">Переименовать</button>
+        <button id="board-delete" type="button" class="board-delete" aria-label="Удалить доску">Удалить</button>
+      </div>
+
       <form id="task-form" novalidate>
+        <!-- активная доска: app.js синхронит value при переключении/создании;
+             POST /api/task уходит в выбранную доску -->
+        <input type="hidden" id="task-board-id" name="boardId" value="">
         <div class="form-field">
           <label for="task-title">Название</label>
           <input id="task-title" name="title" type="text" required autocomplete="off">
@@ -175,12 +194,6 @@
         <details id="task-config">
           <summary>Настройки задачи</summary>
           <div class="config-body">
-            <fieldset class="engine-picker">
-              <legend>Движок</legend>
-              <label class="choice"><input type="radio" name="cfg-engine" value="claude" checked> Клауд</label>
-              <label class="choice"><input type="radio" name="cfg-engine" value="codex"> Кодекс</label>
-            </fieldset>
-
             <fieldset id="cfg-claude-fieldset" data-engine-panel="claude">
               <legend>Клауд</legend>
               <div class="config-fields">
@@ -220,25 +233,6 @@
                 <label class="choice"><input type="checkbox" name="cfg-sub-type" value="factcheck"> Факт-чекинг</label>
               </fieldset>
             </fieldset>
-
-            <fieldset id="cfg-codex-fieldset" data-engine-panel="codex" hidden>
-              <legend>Кодекс</legend>
-              <div class="config-fields">
-                <div class="form-field">
-                  <label for="cfg-codex-model">Модель</label>
-                  <select id="cfg-codex-model" name="cfg-codex-model">
-                    <option value="gpt-5.5" selected>GPT-5.5</option>
-                  </select>
-                </div>
-                <div class="form-field">
-                  <label for="cfg-codex-speed">Скорость</label>
-                  <select id="cfg-codex-speed" name="cfg-codex-speed">
-                    <option value="normal" selected>Обычная</option>
-                    <option value="faster">Фастер</option>
-                  </select>
-                </div>
-              </div>
-            </fieldset>
           </div>
         </details>
 
@@ -252,8 +246,8 @@
 
       <!-- Карточки рендерит app.js. Контракт DOM карточки: заголовок -> бейджи -> статус.
            Бейджи-чипы (неинтерактивные <span>): span.card-badge.badge-model («Клауд 4.8» /
-           «Соннет 4.6» / «Хайку 4.5» / «GPT-5.5»), span.card-badge.badge-mode («Ультракод» /
-           «Обычный» / «Фастер»), плюс существующий span.badge-ai. CSS-классы готовы в style.css. -->
+           «Соннет 4.6» / «Хайку 4.5»), span.card-badge.badge-mode («Ультракод» /
+           «Обычный»), плюс существующий span.badge-ai. CSS-классы готовы в style.css. -->
       <div class="board">
         <section class="board-col" data-col="queue">
           <h3 id="col-queue">Очередь&nbsp;<span class="col-count">(0)</span></h3>
@@ -287,34 +281,11 @@
     <div id="status" class="status-bar" role="status"></div>
   </main>
 
-  <!-- Онбординг: app.js вызывает showModal() только при первом визите
-       (localStorage farm.engineChosen); Escape разрешён — по cancel движок
-       по умолчанию Клауд + анонс в #status. -->
-  <dialog id="onboarding-dialog" aria-labelledby="onboarding-title">
-    <h2 id="onboarding-title">Какой движок использовать?</h2>
-    <div class="onboarding-choices">
-      <div class="onboarding-choice">
-        <button id="onboarding-claude" type="button" autofocus aria-describedby="onboarding-claude-desc">Клауд</button>
-        <p id="onboarding-claude-desc">Модели Клауд: режим Ультракод и команда субагентов.</p>
-      </div>
-      <div class="onboarding-choice">
-        <button id="onboarding-codex" type="button" aria-describedby="onboarding-codex-desc">Кодекс</button>
-        <p id="onboarding-codex-desc">Модель GPT-5.5 с выбором скорости работы.</p>
-      </div>
-    </div>
-  </dialog>
-
-  <!-- Настройки: app.js открывает по #btn-settings; неактивный фрейм движка
-       получает атрибут hidden (не disabled); Сохранить -> PUT /api/settings. -->
+  <!-- Настройки: app.js открывает по #btn-settings; Сохранить -> PUT /api/settings.
+       Движок — только Клауд, поэтому выбора движка нет (панель всегда видна). -->
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <h2 id="settings-title">Настройки</h2>
     <form id="settings-form" method="dialog">
-      <fieldset class="engine-picker">
-        <legend>Движок</legend>
-        <label class="choice"><input type="radio" name="set-engine" value="claude" checked> Клауд</label>
-        <label class="choice"><input type="radio" name="set-engine" value="codex"> Кодекс</label>
-      </fieldset>
-
       <fieldset id="set-claude-fieldset" data-engine-panel="claude">
         <legend>Клауд</legend>
         <div class="config-fields">
@@ -353,25 +324,6 @@
           <label class="choice"><input type="checkbox" name="set-sub-type" value="optimize"> Оптимизация</label>
           <label class="choice"><input type="checkbox" name="set-sub-type" value="factcheck"> Факт-чекинг</label>
         </fieldset>
-      </fieldset>
-
-      <fieldset id="set-codex-fieldset" data-engine-panel="codex" hidden>
-        <legend>Кодекс</legend>
-        <div class="config-fields">
-          <div class="form-field">
-            <label for="set-codex-model">Модель</label>
-            <select id="set-codex-model" name="set-codex-model">
-              <option value="gpt-5.5" selected>GPT-5.5</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label for="set-codex-speed">Скорость</label>
-            <select id="set-codex-speed" name="set-codex-speed">
-              <option value="normal" selected>Обычная</option>
-              <option value="faster">Фастер</option>
-            </select>
-          </div>
-        </div>
       </fieldset>
 
       <div class="dialog-actions">

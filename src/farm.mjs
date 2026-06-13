@@ -29,9 +29,6 @@ const DEFAULT_CONFIG = {
     { id: 'claude-sonnet-4-6', label: 'Соннет 4.6' },
     { id: 'claude-haiku-4-5-20251001', label: 'Хайку 4.5' },
   ],
-  codexModels: [
-    { id: 'gpt-5.5', label: 'GPT-5.5' },
-  ],
   zones: [
     {
       id: 'kitchen',
