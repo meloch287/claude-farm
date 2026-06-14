@@ -2142,7 +2142,7 @@ footer {
 }
 
 #folder-breadcrumb button {
-  min-height: max(2.5rem, 40px); /* breadcrumb is dense; list rows carry 44px */
+  min-height: max(2.75rem, 44px); /* 44px touch floor, consistent with the rest */
   padding: 0.35rem 0.6rem;
   font-weight: 700;
   max-width: 14rem;
@@ -2305,6 +2305,23 @@ footer {
 
 .console-entry.entry-action.action-ok .entry-glyph { color: var(--state-done); }
 .console-entry.entry-action.action-fail .entry-glyph { color: var(--state-error); }
+
+/* passive task-lifecycle row: SSE-driven, SILENT (aria-live="off"), shown only.
+   Quieter than the conversation bubbles — dashed border, dimmed ink, smaller —
+   so the operator reads it as system status, not a chat turn. The «◆» glyph is
+   aria-hidden; the meaning is carried by the .sr-only «Статус:» prefix + text. */
+.console-entry.entry-status {
+  border-style: dashed;
+  border-color: var(--wood);
+  background: var(--surface-2);
+  color: var(--ink-dim);
+  font-size: 0.9em;
+  white-space: normal;
+}
+
+.console-entry.entry-status .entry-glyph {
+  color: var(--state-working);
+}
 
 /* polite running/queue/stopped line */
 .console-state {

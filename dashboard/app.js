@@ -1789,6 +1789,11 @@
       handleEvent(ev);
       notifyCharacterEngine(ev);
       updateHelpersForEvent(ev);
+      // Persistent (but SILENT) task-lifecycle row in the console transcript.
+      // The spoken announcement for this same move is owned by #status via the
+      // board-diff below; this row carries aria-live="off" so it is shown only.
+      const statusLine = consoleStatusForEvent(ev);
+      if (statusLine) appendConsoleStatus(statusLine);
       // Any event tied to a task may have moved a board card: refetch
       // (debounced 500ms) and let the status-diff produce ONE summary.
       if (typeof ev.taskId === "string" || typeof ev.taskId === "number") {
@@ -3530,6 +3535,18 @@
   let consoleController = null; // AbortController for the in-flight fetch
   let consoleStopped = false;  // Stop was pressed: don't auto-pump / clobber «Остановлено»
 
+  // Cap the transcript node count so a long-running farm never grows the log
+  // without bound; once over the cap we drop the oldest entries (FIFO).
+  const MAX_CONSOLE_ENTRIES = 300;
+
+  function trimConsoleLog() {
+    const log = els.consoleLog;
+    if (!log) return;
+    while (log.childElementCount > MAX_CONSOLE_ENTRIES && log.firstElementChild) {
+      log.removeChild(log.firstElementChild);
+    }
+  }
+
   function setConsoleSendEnabled(on) {
     if (!els.consoleSend) return;
     els.consoleSend.setAttribute("aria-disabled", on ? "false" : "true");
@@ -3573,7 +3590,77 @@
 
     p.appendChild(document.createTextNode(text));
     log.appendChild(p);
+    trimConsoleLog();
     log.scrollTop = log.scrollHeight;
+  }
+
+  // ---- Task-status rows in the transcript (SSE-driven, SILENT) -------------
+  // Farm/board task moves are spoken ONCE by the global #status announcer (the
+  // coalesced board-diff). We ALSO show them as persistent rows in the console
+  // transcript so the operator can scroll the lifecycle — but those rows must
+  // NOT be re-announced by this log's polite live region (no double-speak).
+  // Each row carries aria-live="off", which overrides the polite live region it
+  // sits inside, so screen readers ignore its insertion. (Conversation entries
+  // — user/claude/action — stay bare descendants and remain announced once.)
+  function appendConsoleStatus(text) {
+    const log = els.consoleLog;
+    if (!log || !text) return;
+    const p = document.createElement("p");
+    p.className = "console-entry entry-status";
+    // Belt-and-suspenders: aria-live="off" + role="presentation" keeps the node
+    // out of the polite live subtree's announcement path on every AT. A bare
+    // child aria-live="off" inside role="log" is honored inconsistently
+    // (some NVDA/JAWS builds still speak the insertion), so role="presentation"
+    // is the load-bearing suppressor — the same farm move is spoken once by
+    // #status only; this row is visible-but-silent. Meaning is carried by the
+    // .sr-only «Статус:» text, which still reads on manual log navigation.
+    p.setAttribute("aria-live", "off");
+    p.setAttribute("aria-atomic", "false");
+    p.setAttribute("role", "presentation");
+
+    const sr = document.createElement("span");
+    sr.className = "sr-only";
+    sr.textContent = "Статус: ";
+    p.appendChild(sr);
+
+    // Non-color glyph distinct from «✓»/«✗» (action) — a status diamond.
+    const glyph = document.createElement("span");
+    glyph.className = "entry-glyph";
+    glyph.setAttribute("aria-hidden", "true");
+    glyph.textContent = "◆";
+    p.appendChild(glyph);
+
+    p.appendChild(document.createTextNode(text));
+    log.appendChild(p);
+    trimConsoleLog();
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Map a farm SSE event to a concise Russian status line, or null to skip.
+  // Only the lifecycle-shaping events get a row; per-role beats (driver.*,
+  // tester.start/ok) are noise here and stay out of the transcript.
+  function consoleStatusForEvent(ev) {
+    if (!ev || typeof ev.type !== "string") return null;
+    const id = (ev.taskId != null ? String(ev.taskId) : "").trim();
+    if (!id) return null; // status rows are per-task; skip board-less events
+    switch (ev.type) {
+      case "task.queued":
+        return id + " в очереди";
+      case "zone.enter":
+        return typeof ev.zone === "string" && ev.zone
+          ? id + " → " + zoneTitle(ev.zone)
+          : null;
+      case "tester.bounce":
+        return id + " возврат";
+      case "task.done":
+        return id + " готова";
+      case "task.failed": {
+        const reason = typeof ev.message === "string" ? ev.message.trim() : "";
+        return reason ? id + " провалена: " + reason : id + " провалена";
+      }
+      default:
+        return null;
+    }
   }
 
   // Render the visible queue <ul>: one <li> per pending message + a remove
@@ -3751,8 +3838,10 @@
       submitConsole();
     });
 
-    // Enter = send, Shift+Enter = newline.
+    // Enter = send, Shift+Enter = newline. Ignore Enter mid-IME-composition
+    // (Cyrillic/CJK input) so a commit keystroke does not submit prematurely.
     els.consoleInput.addEventListener("keydown", function (e) {
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         submitConsole();
