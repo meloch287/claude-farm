@@ -91,7 +91,7 @@ On start the server loads that file: a `sk-ant-oat…` token goes to `CLAUDE_COD
 
 ## Ultracode subagents
 
-In **Ultracode** mode, before the Sniffer's verdict in the Greenhouse, the farm spawns up to 8 **parallel subagents** on a (usually cheaper) model. Each gets one review type, cycled across the count:
+In **Ultracode** mode, before the Sniffer's verdict in the Greenhouse, the farm spawns up to 8 **parallel subagents** on the latest Sonnet (`claude-sonnet-4-6`) by default. Each gets one review type, cycled across the count:
 
 | Type | Instruction |
 |------|-------------|

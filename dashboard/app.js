@@ -82,12 +82,34 @@
     taskForm: document.getElementById("task-form"),
     taskTitle: document.getElementById("task-title"),
     taskInput: document.getElementById("task-input"),
+    taskFiles: document.getElementById("task-files"),
+    taskFilesList: document.getElementById("task-files-list"),
+    taskCwd: document.getElementById("task-cwd"),
     taskBoardId: document.getElementById("task-board-id"),
     boardSelect: document.getElementById("board-select"),
     boardNew: document.getElementById("board-new"),
     boardRename: document.getElementById("board-rename"),
     boardDelete: document.getElementById("board-delete"),
     boardViewTitle: document.getElementById("board-view-title"),
+    // FEATURE 1 — folder browser
+    taskCwdDisplay: document.getElementById("task-cwd-display"),
+    pickFolderBtn: document.getElementById("pick-folder-btn"),
+    folderDialog: document.getElementById("folder-dialog"),
+    folderBreadcrumb: document.getElementById("folder-breadcrumb"),
+    folderCurrent: document.getElementById("folder-current"),
+    folderUp: document.getElementById("folder-up"),
+    folderList: document.getElementById("folder-list"),
+    folderListWrap: document.getElementById("folder-list-wrap"),
+    folderConfirm: document.getElementById("folder-confirm"),
+    // FEATURE 2 — console
+    consoleSection: document.getElementById("console"),
+    consoleLog: document.getElementById("console-log"),
+    consoleState: document.getElementById("console-state"),
+    consoleQueue: document.getElementById("console-queue"),
+    consoleForm: document.getElementById("console-form"),
+    consoleInput: document.getElementById("console-input"),
+    consoleSend: document.getElementById("console-send"),
+    consoleStop: document.getElementById("console-stop"),
   };
 
   const zoneEls = {};
@@ -1070,10 +1092,147 @@
     setTimeout(tick, SPLIT_POLL_MS);
   }
 
+  // ------------------------------------------------------------------ attachments
+  // Attached context files [{name, text}] read client-side; the <ul> mirrors
+  // this array (the native file input is reset, our list is the source of truth).
+  let attachedFiles = [];
+
+  function pluralFiles(n) {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return "файл";
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "файла";
+    return "файлов";
+  }
+
+  function announceFileCount() {
+    const n = attachedFiles.length;
+    if (n > 0) announce("Прикреплено " + n + " " + pluralFiles(n));
+  }
+
+  function renderFilesList() {
+    const ul = els.taskFilesList;
+    if (!ul) return;
+    ul.textContent = "";
+    for (const f of attachedFiles) {
+      const li = document.createElement("li");
+      li.className = "file-item";
+      const nameEl = document.createElement("span");
+      nameEl.className = "file-name";
+      nameEl.textContent = f.name;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "file-remove";
+      btn.dataset.name = f.name;
+      btn.setAttribute("aria-label", "Убрать файл " + f.name); // distinct per file
+      btn.textContent = "✗"; // decorative glyph; the aria-label carries meaning
+      li.appendChild(nameEl);
+      li.appendChild(btn);
+      ul.appendChild(li);
+    }
+  }
+
+  function removeAttachedFile(name) {
+    const idx = attachedFiles.findIndex(function (f) { return f.name === name; });
+    if (idx === -1) return;
+    attachedFiles.splice(idx, 1);
+    renderFilesList();
+    // Focus management: next remove button, else previous, else the file input.
+    const ul = els.taskFilesList;
+    const buttons = ul ? Array.prototype.slice.call(ul.querySelectorAll(".file-remove")) : [];
+    if (buttons.length === 0) {
+      if (els.taskFiles) els.taskFiles.focus();
+    } else {
+      (buttons[Math.min(idx, buttons.length - 1)] || buttons[0]).focus();
+    }
+    announce(attachedFiles.length > 0
+      ? "Прикреплено " + attachedFiles.length + " " + pluralFiles(attachedFiles.length)
+      : "Файлы откреплены");
+  }
+
+  function readAttachedFiles(fileList) {
+    const files = Array.prototype.slice.call(fileList || []);
+    let pending = files.length;
+    if (pending === 0) return;
+    const done = function () {
+      pending -= 1;
+      if (pending === 0) { renderFilesList(); announceFileCount(); }
+    };
+    files.forEach(function (file) {
+      const dup = attachedFiles.some(function (f) { return f.name === file.name; });
+      if (!dup && attachedFiles.length >= 20) { done(); return; } // cap at 20
+      const reader = new FileReader();
+      reader.onload = function () {
+        let text = typeof reader.result === "string" ? reader.result : "";
+        if (text.length > 200000) text = text.slice(0, 200000); // ~200 KB/file
+        const at = attachedFiles.findIndex(function (f) { return f.name === file.name; });
+        if (at !== -1) attachedFiles[at] = { name: file.name, text: text };
+        else attachedFiles.push({ name: file.name, text: text });
+        done();
+      };
+      reader.onerror = function () {
+        announceFailure("Не удалось прочитать файл «" + file.name + "»");
+        done();
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  function clearAttachedFiles() {
+    attachedFiles = [];
+    renderFilesList();
+    if (els.taskFiles) els.taskFiles.value = "";
+  }
+
+  // Working-directory inline error (server rejection of the chosen path). The
+  // #task-cwd input is now hidden, so the error attaches to the read-only
+  // display (#task-cwd-display) and focus moves to the visible picker button —
+  // the only operable control in this field. The hint id stays first in
+  // aria-describedby so a SR reads format guidance, then the error.
+  function showCwdError(message) {
+    const err = document.getElementById("err-cwd");
+    if (err) {
+      err.hidden = false;
+      err.textContent = "✗ " + message;
+    }
+    if (els.taskCwdDisplay) {
+      els.taskCwdDisplay.setAttribute("aria-describedby", "hint-cwd err-cwd");
+      els.taskCwdDisplay.setAttribute("aria-invalid", "true");
+    }
+    if (els.pickFolderBtn) { try { els.pickFolderBtn.focus(); } catch (e) { /* ignore */ } }
+  }
+
+  function clearCwdError() {
+    const err = document.getElementById("err-cwd");
+    if (err) { err.textContent = ""; err.hidden = true; }
+    if (els.taskCwdDisplay) {
+      els.taskCwdDisplay.removeAttribute("aria-invalid");
+      els.taskCwdDisplay.setAttribute("aria-describedby", "hint-cwd");
+    }
+  }
+
   function initTaskForm() {
     const form = els.taskForm;
     if (!form) return;
     form.noValidate = true; // inline #err-title validation instead of native bubbles
+
+    // Attach files: read client-side, then reset the native input (our <ul> is
+    // the source of truth, and resetting lets re-picking the same file re-fire).
+    if (els.taskFiles) {
+      els.taskFiles.addEventListener("change", function () {
+        readAttachedFiles(els.taskFiles.files);
+        els.taskFiles.value = "";
+      });
+    }
+    if (els.taskFilesList) {
+      els.taskFilesList.addEventListener("click", function (e) {
+        const btn = e.target.closest(".file-remove");
+        if (btn) removeAttachedFile(btn.dataset.name);
+      });
+    }
+    // #task-cwd is now a hidden input written only by the folder browser, so
+    // its previous input-clears-error listener no longer applies; the error is
+    // cleared on a fresh folder pick (in the dialog close handler).
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();
@@ -1104,6 +1263,14 @@
       if (boardId) payload.boardId = boardId;
       const config = taskConfigPayload();
       if (config) payload.config = config;
+      // Working folder + attached context files (the new board-form controls).
+      const cwd = els.taskCwd ? els.taskCwd.value.trim() : "";
+      if (cwd) payload.cwd = cwd;
+      if (attachedFiles.length) {
+        payload.files = attachedFiles.map(function (f) {
+          return { name: f.name, text: f.text };
+        });
+      }
 
       fetch("/api/task", {
         method: "POST",
@@ -1111,16 +1278,34 @@
         body: JSON.stringify(payload),
       })
         .then(function (res) {
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          return res.json().catch(function () { return {}; });
+          // Inspect the body even on error so a rejected cwd shows inline.
+          return res.json().catch(function () { return {}; }).then(function (data) {
+            return { ok: res.ok, status: res.status, data: data };
+          });
         })
-        .then(function (data) {
+        .then(function (r) {
           setFormPending(false);
+          if (!r.ok) {
+            if (r.status === 400 && r.data && r.data.field === "cwd") {
+              showCwdError(r.data.error || "Папка не найдена");
+            } else {
+              announce("Не удалось создать задачу — попробуйте ещё раз");
+            }
+            return;
+          }
+          clearCwdError();
           if (els.taskTitle) els.taskTitle.value = "";
           if (els.taskInput) els.taskInput.value = "";
+          if (els.taskCwd) els.taskCwd.value = "";
+          // Reset the folder-picker display back to its placeholder.
+          if (els.taskCwdDisplay) {
+            els.taskCwdDisplay.textContent = "Папка не выбрана";
+            delete els.taskCwdDisplay.dataset.chosen;
+          }
+          clearAttachedFiles();
           if (els.taskTitle) els.taskTitle.focus(); // back to the start of the form
           if (mode === "ai") {
-            if (data && data.taskId != null) pollSplitResult(data.taskId);
+            if (r.data && r.data.taskId != null) pollSplitResult(r.data.taskId);
           } else {
             announce("Задача добавлена в очередь");
           }
@@ -3127,6 +3312,460 @@
       });
   }
 
+  // ================================================================== FEATURE 1
+  // Folder browser: a native <dialog> that lists ONLY sub-directories from
+  // GET /api/fs and lets the user navigate (breadcrumb + «вверх» + folder
+  // buttons). Confirm writes the chosen path to the hidden #task-cwd input and
+  // the read-only #task-cwd-display. Live-region map:
+  //   • dir change (open / navigate in / up)  -> #folder-current (dialog-scoped role=status)
+  //   • confirm (dialog closed)                -> ONE #status «Выбрана папка: <путь>»
+  // #status stays silent while the modal is open. Folder list = plain
+  // <ul><li><button> (no listbox/tree, plain Tab). On every list rebuild focus
+  // moves to #folder-up FIRST so it is never stranded on a removed button.
+
+  // Current resolved path shown in the dialog (server-canonical).
+  let folderCurrentPath = "";
+  // Open guard: the close handler must tell apart confirm vs cancel/Escape.
+  let folderConfirmed = false;
+
+  function folderPluralDirs(n) {
+    const abs = Math.abs(n) % 100;
+    const last = abs % 10;
+    if (abs > 10 && abs < 20) return "подпапок";
+    if (last === 1) return "подпапка";
+    if (last >= 2 && last <= 4) return "подпапки";
+    return "подпапок";
+  }
+
+  // Announce a dir change in the dialog-scoped polite line (NOT #status).
+  function announceFolder(path, count) {
+    if (!els.folderCurrent) return;
+    els.folderCurrent.textContent =
+      "Папка: " + path + ", " + count + " " + folderPluralDirs(count);
+  }
+
+  // Build the breadcrumb: a <button> per path segment; the last is the current
+  // location (aria-current="location", non-interactive). Root («/») is the
+  // first crumb. Clicking a crumb navigates to that ancestor.
+  function renderBreadcrumb(path) {
+    const ol = els.folderBreadcrumb;
+    if (!ol) return;
+    ol.textContent = "";
+
+    // Split an absolute POSIX path into [{label, path}] from root to leaf.
+    const segs = [];
+    segs.push({ label: "/", path: "/" });
+    const parts = path.split("/").filter(Boolean);
+    let acc = "";
+    for (const part of parts) {
+      acc += "/" + part;
+      segs.push({ label: part, path: acc });
+    }
+
+    segs.forEach(function (seg, i) {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = seg.label;
+      if (i === segs.length - 1) {
+        btn.setAttribute("aria-current", "location");
+        // Current crumb is non-navigating; keep it focusable/readable.
+        btn.addEventListener("click", function (e) { e.preventDefault(); });
+      } else {
+        btn.addEventListener("click", function () { navigateFolder(seg.path); });
+      }
+      li.appendChild(btn);
+      if (i < segs.length - 1) {
+        const sep = document.createElement("span");
+        sep.className = "crumb-sep";
+        sep.setAttribute("aria-hidden", "true");
+        sep.textContent = "›";
+        li.appendChild(sep);
+      }
+      ol.appendChild(li);
+    });
+  }
+
+  // Render the folder list (or an empty/no-access <p>). Focus MUST already be on
+  // #folder-up before this runs so we never detach a focused button.
+  function renderFolderList(data) {
+    const wrap = els.folderListWrap;
+    const list = els.folderList;
+    if (!wrap || !list) return;
+
+    // Drop any prior empty-state <p>.
+    const prevEmpty = wrap.querySelector(".folder-empty");
+    if (prevEmpty) prevEmpty.remove();
+
+    list.textContent = "";
+
+    const entries = data && Array.isArray(data.entries) ? data.entries : [];
+    if (entries.length === 0) {
+      list.hidden = true;
+      const p = document.createElement("p");
+      p.className = "folder-empty";
+      p.textContent = data && data.error
+        ? data.error
+        : "В этой папке нет вложенных папок";
+      wrap.appendChild(p);
+      return;
+    }
+
+    list.hidden = false;
+    for (const entry of entries) {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const glyph = document.createElement("span");
+      glyph.className = "folder-glyph";
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.textContent = "📁";
+      const name = document.createElement("span");
+      name.className = "folder-name";
+      name.textContent = entry.name;
+      btn.appendChild(glyph);
+      btn.appendChild(name);
+      const childPath = (folderCurrentPath === "/" ? "" : folderCurrentPath) + "/" + entry.name;
+      btn.addEventListener("click", function () { navigateFolder(childPath); });
+      li.appendChild(btn);
+      list.appendChild(li);
+    }
+  }
+
+  // Fetch a directory from the server and repaint. Always parks focus on
+  // #folder-up BEFORE the list is rebuilt (the old buttons are about to vanish).
+  function navigateFolder(path) {
+    // Park focus first so the user is never stranded on a removed button.
+    if (els.folderUp) {
+      els.folderUp.setAttribute("aria-disabled", "false");
+      try { els.folderUp.focus(); } catch (e) { /* ignore */ }
+    }
+    const q = typeof path === "string" && path ? "?path=" + encodeURIComponent(path) : "";
+    return fetch("/api/fs" + q)
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data || typeof data.path !== "string") {
+          announceFolder(folderCurrentPath || "/", 0);
+          return;
+        }
+        folderCurrentPath = data.path;
+        renderBreadcrumb(data.path);
+        renderFolderList(data);
+        // «вверх» disabled at the FS root (parent === null).
+        if (els.folderUp) {
+          const atRoot = data.parent == null;
+          els.folderUp.setAttribute("aria-disabled", atRoot ? "true" : "false");
+          els.folderUp.dataset.parent = atRoot ? "" : data.parent;
+        }
+        const count = Array.isArray(data.entries) ? data.entries.length : 0;
+        announceFolder(data.path, count);
+      })
+      .catch(function () {
+        announceFolder(folderCurrentPath || "/", 0);
+      });
+  }
+
+  function initFolderBrowser() {
+    const btn = els.pickFolderBtn;
+    const dialog = els.folderDialog;
+    if (!btn || !dialog || typeof dialog.showModal !== "function") return;
+
+    btn.addEventListener("click", function () {
+      folderConfirmed = false;
+      // Seed from the already-chosen path so re-opening resumes there.
+      const seed = els.taskCwd && els.taskCwd.value ? els.taskCwd.value : "";
+      if (els.folderCurrent) els.folderCurrent.textContent = "";
+      try { dialog.showModal(); } catch (e) { /* ignore */ }
+      // On open, focus #folder-up (per a11y spec), then load the seed/HOME dir.
+      if (els.folderUp) { try { els.folderUp.focus(); } catch (e2) { /* ignore */ } }
+      navigateFolder(seed);
+    });
+
+    // «На уровень выше»: navigate to the stored parent (no-op at root).
+    if (els.folderUp) {
+      els.folderUp.addEventListener("click", function () {
+        if (els.folderUp.getAttribute("aria-disabled") === "true") return;
+        const parent = els.folderUp.dataset.parent || "";
+        if (parent) navigateFolder(parent);
+      });
+    }
+
+    // Confirm button records intent; the close handler does the write so Escape
+    // and «Отмена» (value !== "confirm") leave the chosen path unchanged.
+    if (els.folderConfirm) {
+      els.folderConfirm.addEventListener("click", function () { folderConfirmed = true; });
+    }
+
+    dialog.addEventListener("close", function () {
+      const confirmed = folderConfirmed || dialog.returnValue === "confirm";
+      folderConfirmed = false;
+      if (!confirmed || !folderCurrentPath) {
+        // Cancel/Escape: nothing changes; native <dialog> returns focus to btn.
+        return;
+      }
+      // Write the chosen path to the hidden input + read-only display.
+      if (els.taskCwd) els.taskCwd.value = folderCurrentPath;
+      if (els.taskCwdDisplay) {
+        els.taskCwdDisplay.textContent = folderCurrentPath;
+        els.taskCwdDisplay.dataset.chosen = "true";
+      }
+      clearCwdError();
+      // ONE #status line after close (the dialog-scoped line is gone with it).
+      announce("Выбрана папка: " + folderCurrentPath);
+    });
+  }
+
+  // ================================================================== FEATURE 2
+  // Console under the board: a Claude command chat. The client keeps a FIFO
+  // queue and sends ONE message at a time to POST /api/console; Stop aborts the
+  // in-flight fetch (AbortController), which closes the request so the server
+  // SIGKILLs its child. Live-region map:
+  //   • user message, Claude reply, applied actions -> #console-log (role=log)
+  //   • «Клауд печатает…» / «В очереди: N» / «Остановлено» -> #console-state (role=status)
+  //   • board-card moves from applied actions stay in the global #status
+  //     (board-diff after scheduleBoardRefetch) — never echoed into the log.
+
+  const consoleQueue = [];     // FIFO of pending message strings
+  let consoleBusy = false;     // a request is in flight
+  let consoleController = null; // AbortController for the in-flight fetch
+  let consoleStopped = false;  // Stop was pressed: don't auto-pump / clobber «Остановлено»
+
+  function setConsoleSendEnabled(on) {
+    if (!els.consoleSend) return;
+    els.consoleSend.setAttribute("aria-disabled", on ? "false" : "true");
+  }
+
+  function setConsoleStopEnabled(on) {
+    if (!els.consoleStop) return;
+    els.consoleStop.setAttribute("aria-disabled", on ? "false" : "true");
+  }
+
+  // Polite state line (running / queue size / stopped). Coalesced by the browser
+  // live region; we never write it per keystroke.
+  function setConsoleState(text) {
+    if (els.consoleState) els.consoleState.textContent = text || "";
+  }
+
+  // Append one entry to the transcript (role=log). Each entry carries an
+  // .sr-only speaker prefix so the kind is announced without relying on color.
+  function appendConsoleEntry(kind, text, opts) {
+    const log = els.consoleLog;
+    if (!log) return;
+    const p = document.createElement("p");
+    p.className = "console-entry entry-" + kind;
+
+    const sr = document.createElement("span");
+    sr.className = "sr-only";
+    if (kind === "user") sr.textContent = "Вы: ";
+    else if (kind === "claude") sr.textContent = "Клауд: ";
+    else sr.textContent = "Действие: ";
+    p.appendChild(sr);
+
+    if (kind === "action") {
+      const ok = opts && opts.ok;
+      p.classList.add(ok ? "action-ok" : "action-fail");
+      const glyph = document.createElement("span");
+      glyph.className = "entry-glyph";
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.textContent = ok ? "✓" : "✗";
+      p.appendChild(glyph);
+    }
+
+    p.appendChild(document.createTextNode(text));
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Render the visible queue <ul>: one <li> per pending message + a remove
+  // button. Removing focuses next -> prev -> textarea. Queue size changes are
+  // announced via #console-state (coalesced), never per-keystroke.
+  function renderConsoleQueue() {
+    const ul = els.consoleQueue;
+    if (!ul) return;
+    ul.textContent = "";
+    consoleQueue.forEach(function (msg, idx) {
+      const li = document.createElement("li");
+      const text = document.createElement("span");
+      text.className = "queue-text";
+      text.textContent = msg;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "queue-remove";
+      const preview = truncateText(msg, 40);
+      remove.setAttribute("aria-label", "Убрать из очереди: " + preview);
+      const glyph = document.createElement("span");
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.textContent = "✕";
+      remove.appendChild(glyph);
+      remove.addEventListener("click", function () { removeFromQueue(idx); });
+      li.appendChild(text);
+      li.appendChild(remove);
+      ul.appendChild(li);
+    });
+  }
+
+  function removeFromQueue(idx) {
+    if (idx < 0 || idx >= consoleQueue.length) return;
+    consoleQueue.splice(idx, 1);
+    renderConsoleQueue();
+    // Focus next -> prev -> textarea.
+    const buttons = els.consoleQueue
+      ? els.consoleQueue.querySelectorAll(".queue-remove")
+      : [];
+    let target = null;
+    if (buttons.length > 0) {
+      target = buttons[Math.min(idx, buttons.length - 1)];
+    }
+    if (target) { try { target.focus(); } catch (e) { /* ignore */ } }
+    else if (els.consoleInput) { try { els.consoleInput.focus(); } catch (e2) { /* ignore */ } }
+    setConsoleState("В очереди: " + consoleQueue.length);
+  }
+
+  // Pump the FIFO: send the next queued message if idle. One at a time.
+  function pumpConsole() {
+    if (consoleBusy || consoleQueue.length === 0) return;
+    const message = consoleQueue.shift();
+    renderConsoleQueue();
+    sendConsoleMessage(message);
+  }
+
+  function sendConsoleMessage(message) {
+    consoleBusy = true;
+    consoleStopped = false; // a fresh send clears any prior Stop guard
+    setConsoleStopEnabled(true);
+    setConsoleState("Клауд печатает…");
+    if (els.consoleLog) els.consoleLog.setAttribute("aria-busy", "true");
+
+    consoleController = typeof AbortController === "function" ? new AbortController() : null;
+    const boardId = els.taskBoardId && els.taskBoardId.value
+      ? els.taskBoardId.value
+      : (activeBoardId != null ? String(activeBoardId) : "");
+
+    fetch("/api/console", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ boardId: boardId, message: message }),
+      signal: consoleController ? consoleController.signal : undefined,
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; });
+      })
+      .then(function (data) {
+        if (els.consoleLog) els.consoleLog.setAttribute("aria-busy", "false");
+        const reply = data && typeof data.reply === "string" ? data.reply : "";
+        appendConsoleEntry("claude", reply || "Клауд не ответил");
+        // Applied actions go in the log as «Действие:» entries; the board-card
+        // MOVE itself is announced by the board-diff in #status after refetch.
+        const actions = data && Array.isArray(data.actions) ? data.actions : [];
+        for (const a of actions) {
+          if (a && typeof a.detail === "string") {
+            appendConsoleEntry("action", a.detail, { ok: a.ok === true });
+          }
+        }
+        if (actions.length > 0) scheduleBoardRefetch();
+        finishConsole();
+      })
+      .catch(function (err) {
+        if (els.consoleLog) els.consoleLog.setAttribute("aria-busy", "false");
+        // Abort (Stop) is owned by stopConsole(): it already set «Остановлено»,
+        // halted the queue and moved focus — don't clobber any of that here.
+        if (err && err.name === "AbortError") {
+          consoleBusy = false;
+          consoleController = null;
+          return;
+        }
+        appendConsoleEntry("claude", "Не удалось получить ответ — попробуйте ещё раз");
+        finishConsole();
+      });
+  }
+
+  // Clear busy/running state, then pump the next queued message (if any).
+  function finishConsole() {
+    consoleBusy = false;
+    consoleController = null;
+    setConsoleStopEnabled(false);
+    if (consoleStopped) {
+      // A manual Stop halted the run; leave «Остановлено» up and the queue idle.
+      consoleStopped = false;
+      return;
+    }
+    if (consoleQueue.length > 0) {
+      setConsoleState("В очереди: " + consoleQueue.length);
+      pumpConsole();
+    } else {
+      setConsoleState("");
+    }
+  }
+
+  function submitConsole() {
+    if (!els.consoleInput) return;
+    const message = els.consoleInput.value.trim();
+    if (!message) return; // aria-disabled Send keeps focusable; no-op when empty
+    els.consoleInput.value = "";
+    syncConsoleSendState();
+    if (consoleBusy) {
+      // Busy: queue it (keep sending while busy) and announce the new size.
+      consoleQueue.push(message);
+      renderConsoleQueue();
+      appendConsoleEntry("user", message);
+      setConsoleState("В очереди: " + consoleQueue.length);
+    } else {
+      appendConsoleEntry("user", message);
+      sendConsoleMessage(message);
+    }
+    // After Send, keep focus in the textarea.
+    try { els.consoleInput.focus(); } catch (e) { /* ignore */ }
+  }
+
+  function stopConsole() {
+    if (els.consoleStop && els.consoleStop.getAttribute("aria-disabled") === "true") return;
+    // Mark stopped BEFORE aborting so the fetch's catch (which may run
+    // synchronously on abort) does not pump the queue or clear the message.
+    consoleStopped = true;
+    if (consoleController) {
+      try { consoleController.abort(); } catch (e) { /* ignore */ }
+    }
+    if (els.consoleLog) els.consoleLog.setAttribute("aria-busy", "false");
+    consoleBusy = false;
+    consoleController = null;
+    setConsoleStopEnabled(false);
+    setConsoleState("Остановлено");
+    // After Stop, move focus to the textarea.
+    if (els.consoleInput) { try { els.consoleInput.focus(); } catch (e2) { /* ignore */ } }
+    // The remaining queue stays; let the user resume by sending again.
+  }
+
+  function syncConsoleSendState() {
+    if (!els.consoleInput) return;
+    setConsoleSendEnabled(els.consoleInput.value.trim().length > 0);
+  }
+
+  function initConsole() {
+    if (!els.consoleForm || !els.consoleInput) return;
+    setConsoleSendEnabled(false);
+    setConsoleStopEnabled(false);
+
+    els.consoleForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (els.consoleSend && els.consoleSend.getAttribute("aria-disabled") === "true") return;
+      submitConsole();
+    });
+
+    // Enter = send, Shift+Enter = newline.
+    els.consoleInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submitConsole();
+      }
+    });
+
+    els.consoleInput.addEventListener("input", syncConsoleSendState);
+
+    if (els.consoleStop) {
+      els.consoleStop.addEventListener("click", stopConsole);
+    }
+  }
+
   // ------------------------------------------------------------------ init
 
   function init() {
@@ -3141,6 +3780,8 @@
     initTaskForm();
     initBoards();
     initSettingsUi();
+    initFolderBrowser();
+    initConsole();
     // Park the token in the first zone once layout is ready.
     requestAnimationFrame(function () {
       moveToken(ZONES[0].id, true);

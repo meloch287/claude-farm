@@ -344,8 +344,13 @@ function cliEnv() {
   return env;
 }
 
-/** Spawn an arbitrary CLI prompt call. Resolves {ok, text} | {ok:false, error}. */
-function runCliPrompt(cmd, args, timeoutMs) {
+/**
+ * Spawn an arbitrary CLI prompt call. Resolves {ok, text} | {ok:false, error}.
+ * An optional `onChild` callback receives the spawned child process so callers
+ * can track / kill it (used by the abortable console endpoint). The child is
+ * always cleaned up (timeout SIGKILL) and the promise settles exactly once.
+ */
+function runCliPrompt(cmd, args, timeoutMs, cwd, onChild) {
   return new Promise((resolve) => {
     let settled = false;
     const settle = (result) => {
@@ -358,10 +363,19 @@ function runCliPrompt(cmd, args, timeoutMs) {
 
     let child;
     try {
-      child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], env: cliEnv() });
+      child = spawn(cmd, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: cliEnv(),
+        // Working directory: when the task carries a cwd (the «Рабочая папка»
+        // from the board form), the model's file tools operate inside it.
+        ...(cwd ? { cwd } : {}),
+      });
     } catch (err) {
       settle({ ok: false, error: String(err?.message ?? err) });
       return;
+    }
+    if (typeof onChild === 'function') {
+      try { onChild(child); } catch { /* never let a tracker break the spawn */ }
     }
 
     const timer = setTimeout(() => {
@@ -397,14 +411,29 @@ function runCliPrompt(cmd, args, timeoutMs) {
   });
 }
 
+/**
+ * One-shot `claude -p` call for the board console. Reuses the same clean
+ * cliEnv() / spawn path as the farm runners, but is cwd-less (the console
+ * operates on the board, not a task folder). `onChild` exposes the child for
+ * abort/kill so the «Стоп» button can interrupt the in-flight call.
+ * @param {string} prompt
+ * @param {{model?: string, timeoutMs?: number, onChild?: (child: object) => void}} [options]
+ * @returns {Promise<{ok: boolean, text?: string, error?: string}>}
+ */
+export function askClaude(prompt, { model, timeoutMs = CLAUDE_TIMEOUT_MS, onChild } = {}) {
+  const args = ['-p', String(prompt ?? '')];
+  if (model) args.push('--model', model);
+  return runCliPrompt('claude', args, timeoutMs, undefined, onChild);
+}
+
 /** `claude -p <prompt> [--model <model>]`; model defaults to config.model. */
-function runClaudeCli(prompt, config, model) {
+function runClaudeCli(prompt, config, model, cwd) {
   const args = ['-p', prompt];
   const effectiveModel = model ?? config?.model;
   if (effectiveModel) {
     args.push('--model', effectiveModel);
   }
-  return runCliPrompt('claude', args, config?.claudeTimeoutMs ?? CLAUDE_TIMEOUT_MS);
+  return runCliPrompt('claude', args, config?.claudeTimeoutMs ?? CLAUDE_TIMEOUT_MS, cwd);
 }
 
 // ---------------------------------------------------------------------------
@@ -429,6 +458,10 @@ export const SUBAGENT_LABELS = Object.freeze({
 });
 
 const SUBAGENT_FANOUT_CAP = 8;
+
+// Subagents default to the latest Sonnet (mirrors DEFAULT_SETTINGS.subagents.model
+// in tasks.mjs) so a missing per-task model never silently downgrades them.
+const DEFAULT_SUBAGENT_MODEL = 'claude-sonnet-4-6';
 
 /**
  * Plan the fan-out: count (capped at 8) parallel calls, one per enabled type,
@@ -508,10 +541,17 @@ function isUltracode(taskConfig) {
 
 export function createClaudeRunners(config) {
   // Task model comes from the per-task config; config.model is the fallback.
-  const ask = (ctx, prompt) => runClaudeCli(prompt, config, ctx.task?.config?.model);
-  // Ultracode subagents run on their own (usually cheaper) model.
+  const ask = (ctx, prompt) =>
+    runClaudeCli(prompt, config, ctx.task?.config?.model, ctx.task?.cwd);
+  // Subagents default to the latest Sonnet (claude-sonnet-4-6); a task may still
+  // override the model via its subagents.model.
   const askSubagent = (ctx, prompt) =>
-    runClaudeCli(prompt, config, ctx.task?.config?.subagents?.model);
+    runClaudeCli(
+      prompt,
+      config,
+      ctx.task?.config?.subagents?.model ?? DEFAULT_SUBAGENT_MODEL,
+      ctx.task?.cwd
+    );
   return createCliRunners(config, {
     executorName: 'claude',
     cliLabel: 'claude CLI',
@@ -539,6 +579,23 @@ function createCliRunners(config, { executorName, cliLabel, ask, askSubagent }) 
       ? `Замечание проверяющего с прошлой попытки (обязательно учти и исправь): ${clip(ctx.data.fixNote, 800)}`
       : null;
 
+  // Attached context files (the «прикреплённые файлы» from the board form):
+  // their text is handed to the model verbatim (clipped) as task context.
+  const filesBlock = (ctx) => {
+    const files = Array.isArray(ctx.task?.files) ? ctx.task.files : [];
+    if (files.length === 0) return null;
+    const parts = files.map(
+      (f) => `### Файл: ${String(f?.name ?? 'без имени')}\n${clip(String(f?.text ?? ''), 4000)}`,
+    );
+    return 'Прикреплённые файлы (контекст задачи):\n' + parts.join('\n\n');
+  };
+
+  // Working directory hint: when set, the model may read/write real files there.
+  const cwdLine = (ctx) =>
+    ctx.task?.cwd
+      ? `Рабочая папка задачи: ${ctx.task.cwd}. Можешь читать и создавать файлы в ней своими инструментами.`
+      : null;
+
   const bag = (ctx, reason, bounceTo) => {
     ctx.data.fixNote = reason;
     return { ok: false, reason, bounceTo };
@@ -552,6 +609,8 @@ function createCliRunners(config, { executorName, cliLabel, ask, askSubagent }) 
         'Подготовь сжатые материалы и план выполнения задачи: что именно сделать, ключевые факты, структура будущего результата.',
         `Задача: «${ctx.task.title}».`,
         ctx.task.input ? `Данные задачи:\n${clip(ctx.task.input, 4000)}` : null,
+        filesBlock(ctx),
+        cwdLine(ctx),
         fixNoteLine(ctx),
         'Ответь кратко, по-русски, обычным текстом.',
       ]
@@ -574,6 +633,8 @@ function createCliRunners(config, { executorName, cliLabel, ask, askSubagent }) 
         'Ты — Editor на конвейере «Клауд Ферма». ВЫПОЛНИ задачу по-настоящему, как если бы пользователь спросил ассистента напрямую.',
         `Задача: «${ctx.task.title}».`,
         ctx.task.input ? `Данные задачи:\n${clip(ctx.task.input, 4000)}` : null,
+        filesBlock(ctx),
+        cwdLine(ctx),
         ctx.data.brief ? `Материалы и план от Scraper:\n${clip(ctx.data.brief)}` : null,
         fixNoteLine(ctx),
         'Выдай ГОТОВЫЙ результат в markdown — только сам результат, без преамбулы, без вопросов и без пояснений о процессе.',
@@ -630,9 +691,12 @@ function createCliRunners(config, { executorName, cliLabel, ask, askSubagent }) 
     },
 
     // Рынок — The Archiver: пишет result.md (деливерабл) + manifest.json + zip.
+    // Если у задачи задана рабочая папка (cwd) — кладём результат прямо в неё
+    // (как просил пользователь: «туда же кладёт result.md»), без zip.
     async bath(ctx) {
       const baseDir = resolveOutputDir(ctx.config);
-      const taskDir = path.join(baseDir, ctx.task.id);
+      const usesCwd = Boolean(ctx.task.cwd);
+      const taskDir = usesCwd ? ctx.task.cwd : path.join(baseDir, ctx.task.id);
       try {
         await mkdir(taskDir, { recursive: true });
 
@@ -648,20 +712,25 @@ function createCliRunners(config, { executorName, cliLabel, ask, askSubagent }) 
         await writeFile(resultPath, ctx.data.result ?? '', 'utf8');
         await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
 
-        // Best-effort zip via the zip CLI; absence or failure is fine.
-        await new Promise((resolve) => {
-          execFile(
-            'zip',
-            ['-r', `${ctx.task.id}.zip`, ctx.task.id],
-            { cwd: baseDir },
-            () => resolve()
-          );
-        });
+        // Zip only the default output/<id> layout; a user's working folder is
+        // left as-is (we don't repackage someone's project directory).
+        if (!usesCwd) {
+          await new Promise((resolve) => {
+            execFile(
+              'zip',
+              ['-r', `${ctx.task.id}.zip`, ctx.task.id],
+              { cwd: baseDir },
+              () => resolve()
+            );
+          });
+        }
 
         clearError(ctx, 'bath');
         ctx.data.release = { dir: taskDir, resultPath, manifestPath };
         return {
-          message: `Релиз упакован в ${path.join(ctx.config?.outputDir ?? 'output', ctx.task.id)}`,
+          message: usesCwd
+            ? `Результат записан в ${taskDir}`
+            : `Релиз упакован в ${path.join(ctx.config?.outputDir ?? 'output', ctx.task.id)}`,
         };
       } catch (err) {
         noteError(ctx, 'bath', err?.message ?? err);

@@ -4,3 +4,4 @@
 import "./orchestrator.test.mjs";
 import "./tasks.test.mjs";
 import "./settings.test.mjs";
+import "./console-fs.test.mjs";

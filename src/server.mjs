@@ -3,17 +3,19 @@
 // settings API (GET/PUT /api/settings).
 
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { createEventBus } from './events.mjs';
 import { createFarm } from './orchestrator.mjs';
-import { createSimRunners, createClaudeRunners } from './agents.mjs';
+import { createSimRunners, createClaudeRunners, askClaude } from './agents.mjs';
 import {
   createTaskStore,
   createSettingsStore,
   detectClaudeCli,
+  parseConsoleActions,
 } from './tasks.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -62,19 +64,94 @@ function readBody(req, limit = 64 * 1024) {
   });
 }
 
+// Sanitize attached context files from POST /api/task: keep [{name, text}],
+// coerce to strings, cap count (20), per-file (200 KB) and total (2 MB) size.
+function sanitizeFiles(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  let total = 0;
+  for (const f of raw) {
+    if (out.length >= 20) break;
+    const name = typeof f?.name === 'string' && f.name.trim() ? f.name.slice(0, 200) : 'файл';
+    let text = typeof f?.text === 'string' ? f.text : '';
+    if (text.length > 200_000) text = text.slice(0, 200_000);
+    if (total + text.length > 2_000_000) break;
+    total += text.length;
+    out.push({ name, text });
+  }
+  return out;
+}
+
+// FEATURE 1 — folder browser. List ONLY sub-directories of `requested` (names
+// only, read-only), with the resolved absolute path and its parent (null at the
+// FS root). No/invalid path => the user HOME. Never throws: an unreadable dir
+// resolves to {path, parent, entries:[], error}. The server is local/single-user.
+async function listDirectories(requested) {
+  const home = process.env.HOME || os.homedir() || '/';
+  let dir = typeof requested === 'string' ? requested.trim() : '';
+  if (!dir || !path.isAbsolute(dir)) {
+    dir = home;
+  }
+  const resolved = path.resolve(dir);
+  const parent = path.dirname(resolved);
+  // `dirname('/')` is `/` — at the FS root there is no parent.
+  const parentOrNull = parent === resolved ? null : parent;
+
+  try {
+    const dirents = await readdir(resolved, { withFileTypes: true });
+    const entries = dirents
+      .filter((d) => {
+        try { return d.isDirectory(); } catch { return false; }
+      })
+      .map((d) => ({ name: d.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    return { path: resolved, parent: parentOrNull, entries };
+  } catch {
+    return { path: resolved, parent: parentOrNull, entries: [], error: 'Нет доступа к папке' };
+  }
+}
+
+// FEATURE 2 — console prompt. Hand Claude the current board (id/title/status/
+// attempts) + the user message; it replies in Russian and MAY emit actions.
+function buildConsolePrompt(tasks, message) {
+  const lines = (Array.isArray(tasks) ? tasks : []).map(
+    (t) => `- ${t.id} | ${t.status} | попыток: ${t.attempts} | ${t.title}`,
+  );
+  const board = lines.length > 0 ? lines.join('\n') : '(на доске нет задач)';
+  return [
+    'Ты — ассистент в консоли «Клауд Ферма». Пользователь управляет доской задач (канбан).',
+    'Текущие задачи на доске (id | статус | попытки | название):',
+    board,
+    `Сообщение пользователя:\n${message}`,
+    'Ответь пользователю по-русски, кратко и по делу.',
+    'Если нужно ИЗМЕНИТЬ доску — добавь в конце ответа блок ```json{"actions":[...]}``` где каждое действие одно из:',
+    '{"type":"create","title":"...","input":"..."} — создать задачу;',
+    '{"type":"cancel","taskId":"tN"} — отменить задачу в очереди;',
+    '{"type":"retry","taskId":"tN"} — перезапустить проваленную задачу.',
+    'Если менять доску не нужно — JSON-блок не добавляй.',
+  ].join('\n\n');
+}
+
 /**
  * Start the farm dashboard server.
  * @param {{config: object, bus?: object}} options
  * @returns {Promise<{server: import('node:http').Server, port: number}>}
  */
-export function startServer({ config = {}, bus = createEventBus() } = {}) {
+export function startServer({ config = {}, bus = createEventBus(), consoleAsk } = {}) {
   const requestedPort = config.port ?? 8787;
+  // Console model call. Injectable so tests never spawn a real CLI; defaults to
+  // the real `claude -p` helper. `onChild` is forwarded so the request can kill
+  // the in-flight child when the client aborts (the «Стоп» button).
+  const askConsole = typeof consoleAsk === 'function'
+    ? consoleAsk
+    : (prompt, opts) => askClaude(prompt, opts);
   // Sim farm: fallback executor when the claude CLI is unavailable.
   // stepDelayMs paces sim events at ~15s per zone (5 events x 3000ms) so the
   // dashboard choreography (boss walk -> handoff -> work -> carry -> check)
   // stays within one beat of reality without the catch-up queue compressing it.
-  // Tests and the CLI pass their own config and are unaffected.
-  const simFarm = createFarm({ ...config, stepDelayMs: 3000 }, createSimRunners(), bus);
+  // Tests may pass config.simStepDelayMs (e.g. 0) to run the sim instantly.
+  const simStepDelayMs = Number.isFinite(config.simStepDelayMs) ? config.simStepDelayMs : 3000;
+  const simFarm = createFarm({ ...config, stepDelayMs: simStepDelayMs }, createSimRunners(), bus);
   // Real executor: the claude CLI farm. Minimal pacing — the CLI calls are the
   // natural delay, and the boss wants real tasks done fast.
   const claudeFarm = createFarm(
@@ -84,12 +161,18 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
   );
 
   // Probe the claude CLI ONCE at boot; the cached result picks the executor
-  // per task and is exposed in /api/state as {claudeExecutor}.
+  // per task and is exposed in /api/state as {claudeExecutor}. The probe is
+  // injectable (config.detectCli) so tests skip the real `claude -p` spawn that
+  // would otherwise keep the process alive for the full probe timeout.
   let claudeExecutor = false;
-  const claudeAvailable = detectClaudeCli().then((ok) => {
-    claudeExecutor = ok;
-    return ok;
-  });
+  const probe = typeof config.detectCli === 'function' ? config.detectCli : detectClaudeCli;
+  const claudeAvailable = Promise.resolve()
+    .then(() => probe())
+    .then((ok) => {
+      claudeExecutor = ok === true;
+      return claudeExecutor;
+    })
+    .catch(() => false);
 
   // Global settings (Claude model, ultracode subagents), persisted at
   // output/settings.json.
@@ -136,7 +219,8 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
   async function handleCreateTask(req, res) {
     let body;
     try {
-      body = JSON.parse((await readBody(req)) || '{}');
+      // Larger limit than other routes: attached context files travel here.
+      body = JSON.parse((await readBody(req, 6 * 1024 * 1024)) || '{}');
     } catch {
       sendJson(res, 400, { error: 'Некорректный JSON' });
       return;
@@ -156,7 +240,30 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
       ? body.config
       : undefined;
     const boardId = typeof body.boardId === 'string' ? body.boardId : undefined;
-    const task = store.createTask({ title, input, mode, boardId, config: taskConfig });
+
+    // Working directory (the «Рабочая папка»): optional, but if given it must be
+    // an existing absolute directory on this machine (the server is local).
+    const cwd = typeof body.cwd === 'string' ? body.cwd.trim() : '';
+    if (cwd) {
+      let ok = path.isAbsolute(cwd);
+      if (ok) {
+        try {
+          ok = (await stat(cwd)).isDirectory();
+        } catch {
+          ok = false;
+        }
+      }
+      if (!ok) {
+        sendJson(res, 400, {
+          error: 'Папка не найдена — укажите существующий абсолютный путь',
+          field: 'cwd',
+        });
+        return;
+      }
+    }
+
+    const files = sanitizeFiles(body.files);
+    const task = store.createTask({ title, input, mode, boardId, config: taskConfig, cwd, files });
     sendJson(res, 202, { taskId: task.id, boardId: task.boardId });
   }
 
@@ -241,6 +348,80 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
       message: typeof event.message === 'string' ? event.message.slice(0, 500) : '',
     });
     sendJson(res, 200, { ok: true });
+  }
+
+  // POST /api/console {boardId, message} -> {reply, actions:[{type, ok, detail}]}.
+  // Runs `claude -p` with the current board + the user message; parses an
+  // optional ```json{"actions":[...]}``` block and applies it via the store.
+  // ABORTABLE: the spawned child is tracked; if the client aborts the request
+  // before it finishes, the child is SIGKILLed so «Стоп» really stops it.
+  async function handleConsole(req, res) {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)) || '{}');
+    } catch {
+      sendJson(res, 400, { error: 'Некорректный JSON' });
+      return;
+    }
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
+    if (!message) {
+      sendJson(res, 400, { error: 'Сообщение не может быть пустым' });
+      return;
+    }
+    const boardId = typeof body.boardId === 'string' && body.boardId
+      ? body.boardId
+      : store.listBoards().activeBoardId;
+
+    const tasks = store.list(boardId);
+    const prompt = buildConsolePrompt(tasks, message.slice(0, 4000));
+
+    // Track the spawned child so an aborted request can kill it.
+    let child = null;
+    let aborted = false;
+    const onAbort = () => {
+      aborted = true;
+      if (child) {
+        try { child.kill('SIGKILL'); } catch { /* ignore */ }
+      }
+    };
+    req.on('close', onAbort);
+    req.on('aborted', onAbort);
+
+    const settings = settings_get_safe();
+    const reply = await askConsole(prompt, {
+      model: settings.model,
+      timeoutMs: 90_000,
+      onChild: (c) => { child = c; if (aborted) { try { c.kill('SIGKILL'); } catch { /* ignore */ } } },
+    });
+    req.removeListener('close', onAbort);
+    req.removeListener('aborted', onAbort);
+
+    if (aborted || res.writableEnded || (res.socket && res.socket.destroyed)) {
+      // The client (Stop) is gone — nothing to send, child already killed.
+      return;
+    }
+
+    if (!reply || reply.ok !== true) {
+      sendJson(res, 200, {
+        reply: `Клауд не ответил: ${reply?.error ?? 'нет ответа'}`,
+        actions: [],
+      });
+      return;
+    }
+
+    const parsed = parseConsoleActions(reply.text);
+    const actions = store.applyConsoleActions(parsed, { boardId });
+    sendJson(res, 200, { reply: reply.text, actions });
+  }
+
+  // Read the global settings without ever throwing (the console only needs the model).
+  function settings_get_safe() {
+    try {
+      const s = settings.get();
+      return s && typeof s === 'object' ? s : {};
+    } catch {
+      return {};
+    }
   }
 
   async function handleStatic(pathname, res, headOnly = false) {
@@ -341,6 +522,14 @@ export function startServer({ config = {}, bus = createEventBus() } = {}) {
       }
       if (req.method === 'POST' && pathname === '/api/task') {
         await handleCreateTask(req, res);
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/api/fs') {
+        sendJson(res, 200, await listDirectories(query.get('path')));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/api/console') {
+        await handleConsole(req, res);
         return;
       }
       if (req.method === 'POST' && pathname === '/api/event') {

@@ -365,6 +365,62 @@ export function parseSubtaskJson(text) {
   return null;
 }
 
+const CONSOLE_ACTION_TYPES = new Set(['create', 'cancel', 'retry']);
+
+/**
+ * Defensively extract the console action list from a Claude reply. The model is
+ * asked to emit a ```json{"actions":[...]}``` block; we scan every '{' as a
+ * potential object start (prose/markdown around it is fine), parse the first
+ * balanced block that yields an `actions` array, and keep only well-formed
+ * actions:
+ *   {type:"create", title, input?}  — title must be a non-empty string
+ *   {type:"cancel", taskId}         — taskId must be a non-empty string
+ *   {type:"retry",  taskId}         — taskId must be a non-empty string
+ * Returns [] when there is no parseable block or no valid action (never throws).
+ * @param {string} text
+ * @returns {Array<object>}
+ */
+export function parseConsoleActions(text) {
+  if (typeof text !== 'string') {
+    return [];
+  }
+  for (let start = text.indexOf('{'); start !== -1; start = text.indexOf('{', start + 1)) {
+    const slice = extractBalancedArray(text, start);
+    if (slice === null) {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(slice);
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.actions)) {
+      continue;
+    }
+    const actions = [];
+    for (const raw of parsed.actions) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+      const type = typeof raw.type === 'string' ? raw.type.trim() : '';
+      if (!CONSOLE_ACTION_TYPES.has(type)) continue;
+      if (type === 'create') {
+        const title = isNonEmptyString(raw.title) ? raw.title.trim() : '';
+        if (!title) continue;
+        const input = typeof raw.input === 'string' ? raw.input : '';
+        actions.push({ type: 'create', title, input });
+      } else {
+        const taskId = isNonEmptyString(raw.taskId) ? raw.taskId.trim() : '';
+        if (!taskId) continue;
+        actions.push({ type, taskId });
+      }
+    }
+    // The first block that actually carries an `actions` array wins, even if it
+    // contained only garbage entries (a later prose '{...}' is not the answer).
+    return actions;
+  }
+  return [];
+}
+
 /** Slice a balanced [...] block starting at `start`, string-aware; null if unbalanced. */
 function extractBalancedArray(text, start) {
   let depth = 0;
@@ -484,6 +540,7 @@ export function createTaskStore({
   let counter = 0;        // task id counter (t<n>)
   let boardCounter = 0;   // board id counter (b<n>)
   let running = false;
+  let runningId = null;   // id of the task currently on the farm (cannot cancel)
 
   // Boards («чаты»): independent kanban lists. The FIFO queue stays GLOBAL —
   // boards only organize the board view.
@@ -591,6 +648,9 @@ export function createTaskStore({
     if (typeof raw.finishedAt === 'string') {
       task.finishedAt = raw.finishedAt;
     }
+    // Restore the working directory + attached context files (board form).
+    task.cwd = typeof raw.cwd === 'string' ? raw.cwd : '';
+    task.files = Array.isArray(raw.files) ? raw.files : [];
     return task;
   }
 
@@ -698,6 +758,7 @@ export function createTaskStore({
       return;
     }
     running = true;
+    runningId = id;
     let fallbackNote = null;
     Promise.resolve()
       .then(async () => {
@@ -715,7 +776,14 @@ export function createTaskStore({
         }
         persist();
         return runQueueTask(
-          { id: task.id, title: task.title, input: task.input, config: task.config },
+          {
+            id: task.id,
+            title: task.title,
+            input: task.input,
+            config: task.config,
+            cwd: task.cwd,
+            files: task.files,
+          },
           pick.executor
         );
       })
@@ -739,6 +807,7 @@ export function createTaskStore({
       })
       .finally(() => {
         running = false;
+        runningId = null;
         pump();
       });
   }
@@ -812,9 +881,11 @@ export function createTaskStore({
         input: sub.input,
         source: 'subtask',
         status: 'queued',
-        // Subtasks live on the parent's board and inherit its effective config.
+        // Subtasks live on the parent's board and inherit its effective config
+        // and working directory (same folder); attached files stay on the parent.
         boardId: live.boardId,
         config: live.config,
+        cwd: live.cwd,
       });
       child.parentId = live.id;
       tasks.set(child.id, child);
@@ -824,7 +895,7 @@ export function createTaskStore({
 
   // --- public API -----------------------------------------------------------
 
-  function makeRecord({ title, input, source, status, boardId, config: rawConfig }) {
+  function makeRecord({ title, input, source, status, boardId, config: rawConfig, cwd, files }) {
     counter += 1;
     return {
       id: 't' + counter,
@@ -839,10 +910,14 @@ export function createTaskStore({
       createdAt: new Date().toISOString(),
       // Effective config: per-task partial merged over the global settings.
       config: mergeTaskConfig(currentSettings(), rawConfig),
+      // Working directory (absolute path, validated by the server) + attached
+      // context files [{name, text}] from the board form. Empty by default.
+      cwd: typeof cwd === 'string' && cwd.trim() ? cwd.trim() : '',
+      files: Array.isArray(files) ? files : [],
     };
   }
 
-  function createTask({ title, input, mode, source, boardId, config: rawConfig }) {
+  function createTask({ title, input, mode, source, boardId, config: rawConfig, cwd, files }) {
     const ai = mode === 'ai';
     const task = makeRecord({
       title,
@@ -851,6 +926,8 @@ export function createTaskStore({
       status: ai ? 'splitting' : 'queued',
       boardId,
       config: rawConfig,
+      cwd,
+      files,
     });
     tasks.set(task.id, task);
     if (ai) {
@@ -874,6 +951,98 @@ export function createTaskStore({
   function get(id) {
     const task = tasks.get(id);
     return task ? structuredClone(task) : undefined;
+  }
+
+  // --- console actions: cancel / retry / create ------------------------
+
+  // Remove a still-queued (or splitting) task. A task already on the farm,
+  // done or failed cannot be cancelled — the FIFO worker owns running ones.
+  // Returns {ok, status?} | {ok:false, error}.
+  function cancelTask(id) {
+    const task = tasks.get(id);
+    if (!task) {
+      return { ok: false, error: 'Задача не найдена' };
+    }
+    // The task currently on the farm is owned by the FIFO worker even while its
+    // status still reads "queued" (the runner has not emitted zone.enter yet).
+    if (id === runningId) {
+      return { ok: false, error: 'Задача уже выполняется — отменить нельзя' };
+    }
+    if (task.status !== 'queued' && task.status !== 'splitting') {
+      return { ok: false, error: 'Можно отменить только задачу в очереди' };
+    }
+    // Drop it from the FIFO queue (no-op if it was a splitting parent that
+    // never enqueued). The running task is never in `queue`, so this is safe.
+    const at = queue.indexOf(id);
+    if (at !== -1) queue.splice(at, 1);
+    tasks.delete(id);
+    bus.emit({
+      type: 'task.failed',
+      taskId: id,
+      boardId: task.boardId,
+      message: `Задача „${task.title}“ отменена`,
+    });
+    persist();
+    return { ok: true, status: 'cancelled' };
+  }
+
+  // Re-enqueue a failed task as queued (fresh attempt counter). Only failed
+  // tasks can be retried. Returns {ok, status?} | {ok:false, error}.
+  function retryTask(id) {
+    const task = tasks.get(id);
+    if (!task) {
+      return { ok: false, error: 'Задача не найдена' };
+    }
+    if (task.status !== 'failed') {
+      return { ok: false, error: 'Повторить можно только проваленную задачу' };
+    }
+    task.status = 'queued';
+    task.attempts = 1;
+    task.lastMessage = '';
+    delete task.finishedAt;
+    enqueue(task); // persists + pumps
+    return { ok: true, status: 'queued' };
+  }
+
+  /**
+   * Apply a list of console actions (from parseConsoleActions) against the
+   * store. Each result is {type, ok, detail} so the console can report what it
+   * did. `create` actions land on the given board (falls back to active).
+   * Never throws.
+   * @param {Array<object>} actions
+   * @param {{boardId?: string}} [ctx]
+   * @returns {Array<{type: string, ok: boolean, detail: string}>}
+   */
+  function applyConsoleActions(actions, { boardId } = {}) {
+    const results = [];
+    if (!Array.isArray(actions)) return results;
+    for (const action of actions) {
+      if (!action || typeof action !== 'object') continue;
+      if (action.type === 'create') {
+        const created = createTask({
+          title: action.title,
+          input: typeof action.input === 'string' ? action.input : '',
+          mode: 'simple',
+          boardId,
+        });
+        results.push({ type: 'create', ok: true, detail: `Создана задача „${created.title}“ (${created.id})` });
+      } else if (action.type === 'cancel') {
+        const r = cancelTask(action.taskId);
+        results.push({
+          type: 'cancel',
+          ok: r.ok,
+          detail: r.ok ? `Отменена задача ${action.taskId}` : `${action.taskId}: ${r.error}`,
+        });
+      } else if (action.type === 'retry') {
+        const r = retryTask(action.taskId);
+        results.push({
+          type: 'retry',
+          ok: r.ok,
+          detail: r.ok ? `Перезапущена задача ${action.taskId}` : `${action.taskId}: ${r.error}`,
+        });
+      }
+    }
+    return results;
   }
 
   // --- board API -------------------------------------------------------
@@ -935,6 +1104,9 @@ export function createTaskStore({
     createTask,
     list,
     get,
+    cancelTask,
+    retryTask,
+    applyConsoleActions,
     listBoards,
     setActiveBoard,
     createBoard,

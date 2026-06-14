@@ -26,9 +26,18 @@ export function createFarm(config, runners, bus) {
     // carry the store id; otherwise keep the internal counter.
     const taskId = spec.id ?? 't' + ++taskCounter;
     const ctx = {
-      // task.config: per-task effective config (engine, model, mode/speed,
-      // subagents) — runners read it to pick models and the ultracode plan.
-      task: { id: taskId, title, input, attempts: 1, config: spec.config },
+      // task.config: per-task effective config (model, mode, subagents) —
+      // runners read it to pick models and the ultracode plan. cwd/files carry
+      // the board form's «Рабочая папка» and attached context files.
+      task: {
+        id: taskId,
+        title,
+        input,
+        attempts: 1,
+        config: spec.config,
+        cwd: spec.cwd,
+        files: spec.files,
+      },
       data: {},
       config,
     };

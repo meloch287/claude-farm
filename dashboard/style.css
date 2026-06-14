@@ -242,6 +242,7 @@ section[data-zone],
 .board-col,
 .epic,
 #task-form,
+#console,
 dialog,
 header.site-header,
 .site-header {
@@ -1448,6 +1449,54 @@ select:disabled,
   color: var(--state-error);   /* ~5.6:1 on cream */
 }
 
+/* Field hint under inputs (file context, working folder) */
+.field-hint {
+  margin: 0.25rem 0 0;
+  color: var(--ink-dim);       /* >= 4.5:1 on cream */
+  font-size: 1.05rem;          /* ~15px at 90% density, above the 12px floor */
+}
+
+/* Attached-files list: each row = name + remove button (wooden chip) */
+.files-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.files-list:empty {
+  margin: 0;
+}
+
+.files-list .file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--parchment-deep);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+}
+
+.files-list .file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-list .file-remove {
+  flex: 0 0 auto;
+  min-width: max(2.75rem, 44px);
+  min-height: max(2.75rem, 44px); /* 44px touch target, even at 90% density */
+  padding: 0;
+  color: var(--state-error);
+  line-height: 1;
+}
+
 #task-form .form-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2009,6 +2058,356 @@ footer {
   }
 }
 
+/* ====================================================================
+   FEATURE 1 — Working-folder picker (replaces the free-text #task-cwd).
+   The read-only <output> shows the chosen path; the button opens the
+   folder browser <dialog>. Wooden-frame theme, 44px targets.
+   ==================================================================== */
+
+.cwd-label {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.cwd-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.cwd-display {
+  flex: 1 1 16rem;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: max(2.75rem, 44px);   /* matches the inputs / 44px floor */
+  padding: 0.5rem 0.75rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+  /* long absolute paths wrap rather than overflow the panel */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* «папка не выбрана» placeholder dims; a real path is full ink */
+.cwd-display:not([data-chosen="true"]) {
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+#pick-folder-btn {
+  flex: 0 0 auto;
+}
+
+/* ---------- Folder browser <dialog> ---------- */
+
+#folder-dialog {
+  display: none;             /* native dialog: shown only when [open] */
+}
+
+#folder-dialog[open] {
+  display: grid;
+  gap: 1rem;
+}
+
+/* breadcrumb: a row of wooden segment buttons + chevron separators */
+.folder-path {
+  min-width: 0;
+}
+
+#folder-breadcrumb {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+#folder-breadcrumb li {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+/* chevron between crumbs (decorative, added by app.js as aria-hidden span) */
+#folder-breadcrumb .crumb-sep {
+  color: var(--ink-dim);
+  font-weight: 700;
+}
+
+#folder-breadcrumb button {
+  min-height: max(2.5rem, 40px); /* breadcrumb is dense; list rows carry 44px */
+  padding: 0.35rem 0.6rem;
+  font-weight: 700;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* current segment is non-interactive (aria-current="location") */
+#folder-breadcrumb button[aria-current="location"] {
+  background: var(--gold);
+  color: var(--ink);
+  cursor: default;
+}
+
+/* dialog-scoped polite line: announces dir changes only */
+.folder-current {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 1.05rem;
+}
+
+.folder-toolbar {
+  display: flex;
+  gap: 0.75rem;
+}
+
+#folder-up[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.folder-list-wrap {
+  max-height: 40dvh;
+  overflow: auto;
+  background: var(--surface-2);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+  box-shadow: inset 0 0 0 1px rgba(201, 142, 79, 0.5);
+}
+
+.folder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.375rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.folder-list li {
+  min-width: 0;
+}
+
+/* plain Tab order: each folder is a full-width wooden row button */
+.folder-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: max(2.75rem, 44px);  /* 44px touch target */
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 700;
+}
+
+/* folder glyph: decorative (aria-hidden); meaning rides on the name text */
+.folder-list .folder-glyph {
+  flex: 0 0 auto;
+}
+
+.folder-list .folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* empty / no-access => a <p>, never an empty <ul> */
+.folder-empty {
+  margin: 0;
+  padding: 1rem 0.75rem;
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+.folder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+/* ====================================================================
+   FEATURE 2 — Console under the board (Claude command chat).
+   Transcript = role="log"; #console-state = role="status"; queue = <ul>.
+   ==================================================================== */
+
+#console {
+  margin-top: 1.5rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+  display: grid;
+  gap: 0.875rem;
+}
+
+#console > h2 {
+  margin: 0;
+}
+
+.console-log {
+  max-height: 24rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--surface-2);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+  box-shadow: inset 0 0 0 1px rgba(201, 142, 79, 0.5);
+}
+
+.console-log:empty {
+  display: none;
+}
+
+/* one chat entry: parchment bubble; user vs claude vs action by border/glyph,
+   never color alone (each carries an .sr-only speaker prefix + text glyph) */
+.console-entry {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;     /* keep newlines from multi-line replies */
+}
+
+.console-entry.entry-user {
+  border-color: var(--wood-dark);
+  background: var(--parchment-deep);
+}
+
+.console-entry.entry-claude {
+  border-color: var(--wood);
+}
+
+.console-entry.entry-action {
+  border-color: var(--state-working);
+  background: var(--surface-2);
+  white-space: normal;
+}
+
+/* visible non-color glyph before action entries (✓ ok / ✗ failed) */
+.console-entry .entry-glyph {
+  font-weight: 700;
+  margin-right: 0.4rem;
+}
+
+.console-entry.entry-action.action-ok .entry-glyph { color: var(--state-done); }
+.console-entry.entry-action.action-fail .entry-glyph { color: var(--state-error); }
+
+/* polite running/queue/stopped line */
+.console-state {
+  margin: 0;
+  min-height: 1.4em;          /* reserve room so it never reflows the layout */
+  color: var(--ink-dim);
+  font-weight: 700;
+}
+
+.console-state:empty {
+  min-height: 0;
+}
+
+/* FIFO queue: wooden chips, each with a remove button */
+.console-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.console-queue:empty {
+  display: none;
+}
+
+.console-queue li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--parchment-deep);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+}
+
+.console-queue .queue-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console-queue .queue-remove {
+  flex: 0 0 auto;
+  min-width: max(2.75rem, 44px);
+  min-height: max(2.75rem, 44px);  /* 44px target */
+  padding: 0;
+  color: var(--state-error);
+  line-height: 1;
+}
+
+.console-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+#console-input {
+  font: inherit;
+  width: 100%;
+  min-height: max(3.5rem, 56px);  /* multi-line composer */
+  padding: 0.5rem 0.75rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--wood);
+  border-radius: 0.5rem;
+  resize: vertical;
+}
+
+#console-input:hover {
+  border-color: var(--wood-dark);
+}
+
+.console-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* aria-disabled buttons keep focusable (the click is no-op'd in JS) but read
+   and look disabled — meaning never rides on color alone (text label stays) */
+#console-send[aria-disabled="true"],
+#console-stop[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 30rem) {
+  #console {
+    padding: 1rem;
+  }
+  .cwd-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #pick-folder-btn,
+  .console-actions button {
+    width: 100%;
+  }
+}
+
 /* ---------- Reduced motion: instant moves, no loops, static icons ----------
    (app.js mirrors this via matchMedia: walk/token become instant) */
 
@@ -2085,6 +2484,14 @@ footer {
   .room-sign,
   #task-form input,
   #task-form textarea,
+  .cwd-display,
+  #console,
+  .console-log,
+  .console-entry,
+  .console-queue li,
+  #console-input,
+  .folder-list-wrap,
+  .folder-list button,
   dialog,
   dialog fieldset,
   dialog legend,

@@ -7,8 +7,8 @@
   <title>Клауд Ферма — Урожайная долина</title>
   <link rel="icon" href="favicon.ico" sizes="16x16">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=18">
-  <script src="app.js?v=11" defer></script>
+  <link rel="stylesheet" href="style.css?v=20">
+  <script src="app.js?v=13" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#map">Перейти к карте фермы</a>
@@ -191,6 +191,27 @@
           <textarea id="task-input" name="input" rows="4"></textarea>
         </div>
 
+        <div class="form-field">
+          <label for="task-files">Файлы-контекст (необязательно)</label>
+          <input id="task-files" name="files" type="file" multiple aria-describedby="hint-files">
+          <p id="hint-files" class="field-hint">Текст файлов добавится к данным задачи.</p>
+          <ul id="task-files-list" class="files-list" aria-label="Прикреплённые файлы"></ul>
+        </div>
+
+        <div class="form-field">
+          <span class="cwd-label" id="task-cwd-label">Рабочая папка</span>
+          <!-- Hidden input carries the chosen absolute path to POST /api/task;
+               the read-only <output> shows it. The folder browser writes both. -->
+          <input type="hidden" id="task-cwd" name="cwd" value="">
+          <div class="cwd-row">
+            <output id="task-cwd-display" class="cwd-display" aria-labelledby="task-cwd-label"
+              aria-describedby="hint-cwd">Папка не выбрана</output>
+            <button id="pick-folder-btn" type="button" aria-haspopup="dialog">Выбрать папку</button>
+          </div>
+          <p id="hint-cwd" class="field-hint">Абсолютный путь, например /Users/имя/проект. Задача читает файлы оттуда и туда же кладёт результат.</p>
+          <p id="err-cwd" class="field-error" hidden></p>
+        </div>
+
         <details id="task-config">
           <summary>Настройки задачи</summary>
           <div class="config-body">
@@ -274,12 +295,58 @@
           <ul aria-labelledby="col-done"></ul>
         </section>
       </div>
+
+      <!-- Console (FEATURE 2): a Claude command chat below the board. The user
+           types instructions; app.js POSTs to /api/console one message at a time
+           (FIFO queue, keep typing while busy). Stop aborts the in-flight fetch.
+           Live-region map: the transcript is its OWN role="log" (replies +
+           actions); #console-state (role="status") carries «печатает…» / queue
+           counts / «Остановлено»; board-card moves stay in the global #status. -->
+      <section id="console" aria-labelledby="console-title">
+        <h2 id="console-title">Консоль</h2>
+        <div id="console-log" class="console-log" role="log" aria-live="polite" aria-label="Диалог с Клаудом"></div>
+        <p id="console-state" class="console-state" role="status"></p>
+        <ul id="console-queue" class="console-queue" aria-label="Очередь сообщений"></ul>
+        <form id="console-form" class="console-form" novalidate>
+          <label for="console-input" class="sr-only">Сообщение Клауду</label>
+          <textarea id="console-input" rows="2" autocomplete="off"
+            aria-describedby="console-hint" placeholder="Команда Клауду…"></textarea>
+          <p id="console-hint" class="field-hint">Enter — отправить, Shift+Enter — новая строка.</p>
+          <div class="console-actions">
+            <button id="console-send" type="submit" aria-disabled="true">Отправить</button>
+            <button id="console-stop" type="button" aria-disabled="true">Стоп</button>
+          </div>
+        </form>
+      </section>
     </section>
 
     <div id="token" class="token" aria-hidden="true"></div>
 
     <div id="status" class="status-bar" role="status"></div>
   </main>
+
+  <!-- Folder browser (FEATURE 1): app.js opens it from #pick-folder-btn, fetches
+       GET /api/fs, renders the breadcrumb + «вверх» + folder buttons, and on
+       confirm writes the path to #task-cwd (hidden) + #task-cwd-display. The
+       dialog-scoped #folder-current announces dir changes; #status stays quiet
+       while the modal is open and gets ONE «Выбрана папка» line on confirm. -->
+  <dialog id="folder-dialog" aria-labelledby="folder-title">
+    <h2 id="folder-title">Выбрать папку</h2>
+    <nav class="folder-path" aria-label="Текущий путь">
+      <ol id="folder-breadcrumb"></ol>
+    </nav>
+    <p id="folder-current" class="folder-current" role="status"></p>
+    <div class="folder-toolbar">
+      <button id="folder-up" type="button">На уровень выше</button>
+    </div>
+    <div id="folder-list-wrap" class="folder-list-wrap">
+      <ul id="folder-list" class="folder-list"></ul>
+    </div>
+    <form method="dialog" class="folder-actions">
+      <button type="submit" value="confirm" id="folder-confirm">Выбрать эту папку</button>
+      <button type="submit" value="cancel" formnovalidate>Отмена</button>
+    </form>
+  </dialog>
 
   <!-- Настройки: app.js открывает по #btn-settings; Сохранить -> PUT /api/settings.
        Движок — только Клауд, поэтому выбора движка нет (панель всегда видна). -->
